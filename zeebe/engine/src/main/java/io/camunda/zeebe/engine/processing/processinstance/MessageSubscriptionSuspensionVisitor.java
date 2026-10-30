@@ -44,7 +44,7 @@ import org.jspecify.annotations.NullMarked;
  * torn down. This also lets overlapping or restarted walks close each subscription once.
  */
 @NullMarked
-final class MessageSubscriptionSuspensionVisitor implements ElementInstanceVisitor {
+public final class MessageSubscriptionSuspensionVisitor implements ElementInstanceVisitor {
 
   private final StateWriter stateWriter;
   private final SideEffectWriter sideEffectWriter;
@@ -53,7 +53,7 @@ final class MessageSubscriptionSuspensionVisitor implements ElementInstanceVisit
   private final TransientPendingSubscriptionState transientProcessMessageSubscriptionState;
   private final InstantSource clock;
 
-  MessageSubscriptionSuspensionVisitor(
+  public MessageSubscriptionSuspensionVisitor(
       final StateWriter stateWriter,
       final SideEffectWriter sideEffectWriter,
       final ProcessMessageSubscriptionState processMessageSubscriptionState,
