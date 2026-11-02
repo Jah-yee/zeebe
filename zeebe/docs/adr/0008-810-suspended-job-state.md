@@ -59,8 +59,8 @@ walk (D6), one element instance per batch; resume uses `ProcessInstanceSuspensio
 is paid once per walk step, and once per resume cycle, not on every poll.
 
 - **Suspend:** `ProcessInstanceSuspendProcessor` validates the command, appends
-  `ProcessInstance.SUSPENDING`, responds `SUSPENDING`, and starts the element instance walk (D6),
-  which also closes message subscriptions. For each visited element instance, the walk appends `Job.SUSPENDED`
+  `ProcessInstance.SUSPENDING`, responds `SUSPENDING`, and starts the element instance walk (D6).
+  For each visited element instance, the walk appends `Job.SUSPENDED`
   for its job if the job is `ACTIVATABLE` or `WAITING_FOR_SECRET_RESOLUTION` and the element is not
   terminating (see D3 notes). The walk appends `ProcessInstance.SUSPENDED` once it is done. The walk's first step is processed inline in
   `SUSPEND`'s own batch, so a root with no children finishes there too; a deeper tree usually
@@ -69,8 +69,7 @@ is paid once per walk step, and once per resume cycle, not on every poll.
   `RESUME` sent while `SUSPENDING` is rejected with `INVALID_STATE`; callers must wait for
   `SUSPENDED`.
   `Job.SUSPENDED` carries the job's own record, including its variables, so it is not fixed-size,
-  but it is the only record suspend writes per job — no activation record alongside it. Each walk
-  step suspends at most one job, so no batch grows with the number of jobs (see Consequences).
+  but it is the only record suspend writes per job — no activation record alongside it.
 - **Hand-out while `SUSPENDING`:** a job the walk has not reached yet is still in the activatable
   index, so a worker can activate it. Its `CompleteJob` or `FailJob` is then rejected by the gate,
   and once it times out, `JobTimeOut` suspends it (D3). This window lasts only as long as the walk.
@@ -185,14 +184,14 @@ alongside the existing `State` enum — the same shape as `JOB_ACTIVATABLE_BY_PR
   suspension, was rejected as an action in the hottest path of the engine.
 
 **D6. Suspend walks the element instance tree depth-first (post-order), one element instance per
-command, emits a user task or job event for every user task or job it suspends, and closes every
-open message subscription.**
+command, and emits a user task or job event for every user task or job it suspends.**
 `ElementInstanceWalkSuspendProcessor` handles a single command intent,
 `ElementInstanceWalk.SUSPEND`. Its cursor — `elementInstanceKey`, `parentKey`, and
 `index` — is carried on the command, not persisted in state. For the element instance at
 `elementInstanceKey`, the command descends into the next child after `index` if one exists
-(writing only a follow-up command, no event); otherwise it runs the user task, job, and message subscription visitors and writes
-`ElementInstanceWalk.SUSPENDED`. After suspending an element instance, the walk moves straight on to
+(writing only a follow-up command, no event); otherwise it runs the user task, job, and message
+subscription visitors and writes `ElementInstanceWalk.SUSPENDED`. After suspending an element
+instance, the walk moves straight on to
 its next sibling under the same parent (`index = -1`, so the sibling's own children are visited
 from the start); only once there is no sibling left does it ascend to the parent, with `index` set
 to the element instance just suspended, so the parent's own next step seeks from there. Once the
@@ -282,12 +281,8 @@ continues at the next sibling under `parentKey` (or ascends from there if none i
 ## Consequences
 
 - One `Job.SUSPENDED` event per affected job, written by the element instance walk (D6) one
-  element instance per batch. Suspend no longer hits the max record batch size however many jobs
-  an instance has. Resume does not either: one job per `RESUME_JOBS` cycle keeps each cycle's batch
-  bounded to that job's own activation cost.
-- Suspend no longer hits the max record batch size however many message subscriptions an instance
-  has: the walk (D6) closes them one element instance per batch, instead of all in `SUSPEND`'s own
-  batch ([#61057](https://github.com/camunda/camunda/issues/61057)).
+  element instance per batch. Resume handles one job per `RESUME_JOBS` cycle, which keeps each
+  cycle's batch bounded to that job's own activation cost.
 - Jobs the walk has not reached yet can still be handed out while the instance is `SUSPENDING`
   (D2). Such a job is rejected on completion and suspended once it times out.
 - Resume no longer re-walks the tree per cycle: `JOBS_BY_PROCESS_INSTANCE` (D5) lets each
@@ -334,6 +329,8 @@ continues at the next sibling under `parentKey` (or ascends from there if none i
   suspended jobs after this ADR's one-job-per-cycle revision; resolved by D5's cursor-based index.
 - [#65763](https://github.com/camunda/camunda/issues/65763) — deduplicate user task suspension
   across overlapping walks (D7).
+- [#61057](https://github.com/camunda/camunda/issues/61057) — close message subscriptions in the
+  suspension walk (D6).
 - [Slack discussion](https://camunda.slack.com/archives/C0AJXAUUY65/p1792070328920839) — choosing
   the column family over buffering or a resume-time walk for user tasks (D7).
 
