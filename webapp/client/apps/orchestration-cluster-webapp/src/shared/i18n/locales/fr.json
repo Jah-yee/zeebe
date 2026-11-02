@@ -1598,8 +1598,12 @@
 				}
 			},
 			"processInstance": {
+				"ds": {
+					"forbidden": {
+						"heading": "Vous n'avez pas la permission de consulter ces informations"
+					}
+				},
 				"scaffold": {
-					"headerPlaceholder": "Espace réservé de l’en-tête",
 					"diagramPanelPlaceholder": "Espace réservé du panneau de diagramme",
 					"bottomPanelPlaceholder": "Espace réservé du panneau inférieur"
 				},
@@ -1691,6 +1695,7 @@
 				},
 				"header": {
 					"key": "Clé d'instance de processus",
+					"keyCopyButtonDescription": "Clé d'instance de processus / Cliquer pour copier",
 					"waiting": "En attente",
 					"waitingCount": "{{count}} en attente",
 					"version": "Version",
