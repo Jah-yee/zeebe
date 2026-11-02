@@ -20,11 +20,13 @@ import {createLicense} from '#/shared-test-modules/api-mocks/license';
 import {createSystemConfiguration} from '#/shared-test-modules/api-mocks/system-configuration';
 import {createProcessInstance} from '#/shared-test-modules/api-mocks/process-instances';
 import {createPaginatedResponse} from '#/shared-test-modules/api-mocks/shared';
+import {processInstanceHeaderHandlers} from '#/shared-test-modules/process-instance-header-handlers';
 
 const PROCESS_INSTANCE_ID = '2251799813685280';
 
 test.beforeEach(({network}) => {
 	network.use(
+		...processInstanceHeaderHandlers(createProcessInstance({processInstanceKey: PROCESS_INSTANCE_ID})),
 		mockCurrentUserEndpoint({
 			successResponse: HttpResponse.json(createCurrentUser({authorizedComponents: ['operate']})),
 		}),
@@ -48,7 +50,7 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
 
 		await expect(operatePreviewProcessInstancePage.heading).toBeAttached();
-		await expect(operatePreviewProcessInstancePage.headerPlaceholder).toBeVisible();
+		await expect(operatePreviewProcessInstancePage.header).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.diagramPanelPlaceholder).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.bottomPanelPlaceholder).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.variablesTab).toBeVisible();

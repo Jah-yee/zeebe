@@ -125,24 +125,27 @@ const ProcessInstanceOperations: React.FC = () => {
 	return (
 		<>
 			{isCollapsed && isRunning ? (
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" size="sm">
-							{t('operate.processInstance.operations.actions')}
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						{operations.map(({action, status, execute: run}) => {
-							const Icon = ICONS[action];
-							return (
-								<DropdownMenuItem key={action} disabled={status === 'pending'} onSelect={() => execute(action, run)}>
-									{Icon !== undefined && <Icon aria-hidden="true" />}
-									{labels[action]}
-								</DropdownMenuItem>
-							);
-						})}
-					</DropdownMenuContent>
-				</DropdownMenu>
+				<>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="ghost" size="sm">
+								{t('operate.processInstance.operations.actions')}
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							{operations.map(({action, status, execute: run}) => {
+								const Icon = ICONS[action];
+								return (
+									<DropdownMenuItem key={action} disabled={status === 'pending'} onSelect={() => execute(action, run)}>
+										{Icon !== undefined && <Icon aria-hidden="true" />}
+										{labels[action]}
+									</DropdownMenuItem>
+								);
+							})}
+						</DropdownMenuContent>
+					</DropdownMenu>
+					{operations.filter(({status}) => status !== 'idle').map(renderStatus)}
+				</>
 			) : (
 				operations.map((operation) => {
 					const {action, status, execute: run} = operation;
@@ -169,6 +172,7 @@ const ProcessInstanceOperations: React.FC = () => {
 				<CancelConfirmationModal
 					processInstanceKey={processInstanceKey}
 					open
+					getRootInstancePath={(rootInstanceId) => `/operate-preview/processes/${rootInstanceId}`}
 					onCancel={() => setConfirmation(null)}
 					onConfirm={() => {
 						setConfirmation(null);

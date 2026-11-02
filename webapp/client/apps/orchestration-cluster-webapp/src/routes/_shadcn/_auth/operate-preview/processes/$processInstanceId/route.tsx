@@ -93,7 +93,7 @@ export const Route = createFileRoute('/_shadcn/_auth/operate-preview/processes/$
 					activeTab={getProcessInstanceTabFromPath(pathname)}
 					onTabChange={(tab) => void changeTab(tab)}
 					breadcrumb={
-						hierarchy && hierarchy.length > 0 ? (
+						hierarchy && hierarchy.length > 1 ? (
 							<ProcessInstanceBreadcrumb callHierarchy={hierarchy.slice(0, -1)} processInstance={processInstance} />
 						) : undefined
 					}

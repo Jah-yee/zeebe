@@ -100,13 +100,17 @@ describe('<ProcessInstanceOperations /> (DS)', () => {
 
 		const screen = await renderOperations(instance);
 
-		for (const action of ['Retry', 'Suspend', 'Resume', 'Cancel', 'Delete']) {
-			const button = screen.getByRole('button', {name: `${action} Instance ${instance.processInstanceKey}`});
-			if (actions.some((name) => name === action)) {
-				await expect.element(button).toBeEnabled();
-			} else {
-				await expect.element(button).not.toBeInTheDocument();
-			}
+		const buttonFor = (action: string) =>
+			screen.getByRole('button', {name: `${action} Instance ${instance.processInstanceKey}`});
+		const hiddenActions = ['Retry', 'Suspend', 'Resume', 'Cancel', 'Delete'].filter(
+			(action) => !(actions as readonly string[]).includes(action),
+		);
+
+		for (const action of actions) {
+			await expect.element(buttonFor(action)).toBeEnabled();
+		}
+		for (const action of hiddenActions) {
+			await expect.element(buttonFor(action)).not.toBeInTheDocument();
 		}
 	});
 
@@ -164,6 +168,21 @@ describe('<ProcessInstanceOperations /> (DS)', () => {
 		}
 		await userEvent.keyboard('{Escape}');
 		await expect.element(screen.getByRole('button', {name: 'Actions'})).toHaveFocus();
+	});
+
+	it('should show the progress of an operation started from the collapsed menu', async ({worker}) => {
+		mockViewport(true);
+		const instance = createInstance('ACTIVE');
+		worker.use(
+			mockSuspendProcessInstanceEndpoint({successResponse: new HttpResponse(null, {status: 204})}),
+			mockGetProcessInstanceEndpoint({successResponse: HttpResponse.json({...instance, state: 'SUSPENDED'})}),
+		);
+		const screen = await renderOperations(instance);
+
+		await userEvent.click(screen.getByRole('button', {name: 'Actions'}));
+		await userEvent.click(screen.getByRole('menuitem', {name: 'Suspend'}));
+
+		await expect.element(screen.getByRole('status')).toBeVisible();
 	});
 
 	it('should keep the delete button visible for finished instances when collapsed', async () => {

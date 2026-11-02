@@ -92,7 +92,7 @@ describe('<ProcessInstanceHeader /> (DS)', () => {
 
 		const screen = await renderHeader(instance);
 
-		await expect.element(screen.getByTestId('instance-header')).toBeVisible();
+		await expect.element(screen.getByRole('table')).toBeVisible();
 		await expect.element(screen.getByText('Order', {exact: true})).toBeVisible();
 		await expect.element(screen.getByText('2 waiting')).toBeVisible();
 		await expect.element(screen.getByText('Tenant A', {exact: true})).toBeVisible();
