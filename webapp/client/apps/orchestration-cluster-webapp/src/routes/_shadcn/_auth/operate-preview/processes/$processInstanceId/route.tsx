@@ -23,6 +23,7 @@ import {
 } from '#/operate/pages/ProcessInstance/shadcn.components/processInstanceTabs';
 import {ProcessInstanceBreadcrumb} from '#/operate/pages/ProcessInstance/shadcn.components/ProcessInstanceBreadcrumb';
 import {ProcessInstanceError} from '#/operate/pages/ProcessInstance/shadcn.components/ProcessInstanceError';
+import {InstanceDiagram} from '#/operate/pages/ProcessInstance/shadcn.components/InstanceDiagram';
 import {ProcessInstanceHeader} from '#/operate/pages/ProcessInstance/shadcn.components/ProcessInstanceHeader';
 import {ProcessInstanceHeaderSkeleton} from '#/operate/pages/ProcessInstance/shadcn.components/ProcessInstanceHeaderSkeleton';
 import {ProcessInstanceOperations} from '#/operate/pages/ProcessInstance/ProcessInstanceOperations/shadcn.components/ProcessInstanceOperations';
@@ -122,6 +123,7 @@ export const Route = createFileRoute('/_shadcn/_auth/operate-preview/processes/$
 							<ProcessInstanceBreadcrumb callHierarchy={hierarchy.slice(0, -1)} processInstance={processInstance} />
 						) : undefined
 					}
+					topPanel={<InstanceDiagram />}
 					header={<ProcessInstanceHeader operations={<ProcessInstanceOperations key={processInstanceId} />} />}
 				>
 					<Outlet />
