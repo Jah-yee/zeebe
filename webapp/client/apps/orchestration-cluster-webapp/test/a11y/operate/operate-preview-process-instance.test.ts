@@ -14,6 +14,7 @@ import {
 	mockGetProcessInstanceEndpoint,
 	mockGetProcessInstanceWaitStateStatisticsEndpoint,
 	mockLicenseEndpoint,
+	mockQueryProcessInstanceIncidentsEndpoint,
 	mockQueryVariablesEndpoint,
 	mockGetVariableEndpoint,
 	mockSystemConfigurationEndpoint,
@@ -22,6 +23,7 @@ import {createCurrentUser} from '#/shared-test-modules/api-mocks/current-user';
 import {createLicense} from '#/shared-test-modules/api-mocks/license';
 import {createSystemConfiguration} from '#/shared-test-modules/api-mocks/system-configuration';
 import {createProcessInstance} from '#/shared-test-modules/api-mocks/process-instances';
+import {createIncident} from '#/shared-test-modules/api-mocks/incidents';
 import {createPaginatedResponse} from '#/shared-test-modules/api-mocks/shared';
 import {createQueryVariablesByUserTaskResponse, createVariable} from '#/shared-test-modules/api-mocks/variables';
 import {createCallHierarchy} from '#/shared-test-modules/api-mocks/call-hierarchy';
@@ -155,6 +157,46 @@ test.describe('Variables tab', () => {
 		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
 		await operatePreviewProcessInstancePage.variableRow('amount').getByRole('button', {name: 'Open'}).click();
 		await expect(page.getByRole('dialog')).toBeVisible();
+
+		const results = await makeAxeBuilder().analyze();
+		expect(results.violations).toEqual([]);
+	});
+});
+
+test.describe('Incidents tab', () => {
+	test.beforeEach(({network}) => {
+		network.use(...processInstanceHeaderHandlers(createProcessInstance({processInstanceKey: PROCESS_INSTANCE_ID})));
+		network.use(
+			mockQueryProcessInstanceIncidentsEndpoint({
+				successResponse: HttpResponse.json(
+					createPaginatedResponse({
+						items: [createIncident({errorMessage: 'Payment failed'})],
+						page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+					}),
+				),
+			}),
+		);
+	});
+
+	test('should have no accessibility violations with incidents listed', async ({
+		operatePreviewProcessInstancePage,
+		makeAxeBuilder,
+	}) => {
+		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+		await operatePreviewProcessInstancePage.incidentsTab.click();
+		await expect(operatePreviewProcessInstancePage.incidentsTable).toBeVisible();
+
+		const results = await makeAxeBuilder().analyze();
+		expect(results.violations).toEqual([]);
+	});
+
+	test('should have no accessibility violations with an incident expanded', async ({
+		operatePreviewProcessInstancePage,
+		makeAxeBuilder,
+	}) => {
+		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+		await operatePreviewProcessInstancePage.incidentsTab.click();
+		await operatePreviewProcessInstancePage.incidentsTable.getByRole('button', {name: 'Expand row'}).click();
 
 		const results = await makeAxeBuilder().analyze();
 		expect(results.violations).toEqual([]);

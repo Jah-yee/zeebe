@@ -14,6 +14,7 @@ import {
 	mockGetProcessInstanceEndpoint,
 	mockGetProcessInstanceWaitStateStatisticsEndpoint,
 	mockLicenseEndpoint,
+	mockQueryProcessInstanceIncidentsEndpoint,
 	mockQueryVariablesEndpoint,
 	mockSystemConfigurationEndpoint,
 } from '#/shared-test-modules/mock-handlers';
@@ -22,6 +23,7 @@ import {createLicense} from '#/shared-test-modules/api-mocks/license';
 import {createSystemConfiguration} from '#/shared-test-modules/api-mocks/system-configuration';
 import {createProcessInstance} from '#/shared-test-modules/api-mocks/process-instances';
 import {createCallHierarchy} from '#/shared-test-modules/api-mocks/call-hierarchy';
+import {createIncident} from '#/shared-test-modules/api-mocks/incidents';
 import {createPaginatedResponse, createProblemDetails} from '#/shared-test-modules/api-mocks/shared';
 import {createQueryVariablesByUserTaskResponse, createVariable} from '#/shared-test-modules/api-mocks/variables';
 import {processInstanceHeaderHandlers} from '#/shared-test-modules/process-instance-header-handlers';
@@ -114,6 +116,33 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 		await expect(
 			operatePreviewProcessInstancePage.variableRow('amount').getByRole('button', {name: 'Open'}),
 		).toBeVisible();
+	});
+
+	test('should list the incidents of the process instance and select the failing element on row click', async ({
+		network,
+		operatePreviewProcessInstancePage,
+		page,
+	}) => {
+		network.use(
+			mockQueryProcessInstanceIncidentsEndpoint({
+				successResponse: HttpResponse.json(
+					createPaginatedResponse({
+						items: [createIncident({errorMessage: 'Payment failed'})],
+						page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+					}),
+				),
+			}),
+		);
+
+		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+		await operatePreviewProcessInstancePage.incidentsTab.click();
+
+		const row = operatePreviewProcessInstancePage.incidentsTable.getByRole('row', {name: /Payment failed/});
+		await expect(row).toBeVisible();
+
+		await row.click();
+
+		await expect(page).toHaveURL(/elementId=/);
 	});
 
 	test('should keep the selected element in the URL and clear it on a second canvas click', async ({
