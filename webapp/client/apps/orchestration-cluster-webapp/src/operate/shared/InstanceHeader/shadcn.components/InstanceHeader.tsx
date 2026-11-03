@@ -46,6 +46,8 @@ const InstanceHeader: React.FC<InstanceHeaderProps> = ({
 	return (
 		<header
 			data-testid="instance-header"
+			role="group"
+			aria-label={t('operate.shared.instanceHeader.label')}
 			className={cn(
 				'flex min-w-0 items-center gap-4 border-b border-border px-4 py-1',
 				hideBottomBorder && 'border-b-0',

@@ -24,10 +24,8 @@ import {getWaitStateLabel} from '#/operate/shared/utils/waitStates';
 import {useMatchMedia} from '#/operate/shared/useMatchMedia';
 import {processInstanceIncidentsCountQuery, useProcessInstanceWaitStateStatistics} from '../processInstance.queries';
 import {useProcessInstancePage} from '../useProcessInstancePage';
+import {COLLAPSED_LAYOUT_QUERY} from './collapsedLayoutQuery';
 import {ProcessInstanceHeaderSkeleton} from './ProcessInstanceHeaderSkeleton';
-
-// Carbon's "xlg" breakpoint (82rem); the DS header must collapse at the same width as the Carbon one.
-const REDUCED_LAYOUT_QUERY = '(max-width: 82rem)';
 
 type Props = {
 	operations?: React.ReactNode;
@@ -50,7 +48,7 @@ const ProcessInstanceHeader: React.FC<Props> = ({operations}) => {
 		hasIncident,
 	} = instance;
 	const processDefinitionName = getProcessDefinitionName(instance);
-	const isReducedLayout = useMatchMedia(REDUCED_LAYOUT_QUERY);
+	const isReducedLayout = useMatchMedia(COLLAPSED_LAYOUT_QUERY);
 	const {data: waitStateStatistics, isError: isWaitStateError} = useProcessInstanceWaitStateStatistics(instance);
 	const waitingCount = isWaitStateError
 		? 0
@@ -124,14 +122,12 @@ const ProcessInstanceHeader: React.FC<Props> = ({operations}) => {
 			hidden: isReducedLayout,
 			title: formatTimestamp(startDate),
 			content: formatTimestamp(startDate),
-			dataTestId: 'start-date',
 		},
 		{
 			name: t('operate.processInstance.header.endDate'),
 			hidden: endDate === null || isReducedLayout,
 			title: formatTimestamp(endDate),
 			content: formatTimestamp(endDate),
-			dataTestId: 'end-date',
 		},
 		{
 			name: t('operate.processInstance.header.calledInstances'),

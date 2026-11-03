@@ -15,11 +15,13 @@ import type {ProcessInstance} from '@camunda/camunda-api-zod-schemas/8.11';
 import {it} from '#/vitest-modules/test-extend';
 import {renderWithRouter} from '#/vitest-modules/render-with-router';
 import {createProcessInstance} from '#/shared-test-modules/api-mocks/process-instances';
+import {createProblemDetails} from '#/shared-test-modules/api-mocks/shared';
 import {createSystemConfiguration} from '#/shared-test-modules/api-mocks/system-configuration';
 import {
 	mockCancelProcessInstanceEndpoint,
 	mockGetProcessInstanceCallHierarchyEndpoint,
 	mockGetProcessInstanceEndpoint,
+	mockResumeProcessInstanceEndpoint,
 	mockSuspendProcessInstanceEndpoint,
 } from '#/shared-test-modules/mock-handlers';
 import {notificationsStore} from '#/shared/notifications/notifications.store';
@@ -170,7 +172,7 @@ describe('<ProcessInstanceOperations /> (DS)', () => {
 		await expect.element(screen.getByRole('button', {name: 'Actions'})).toHaveFocus();
 	});
 
-	it('should show the progress of an operation started from the collapsed menu', async ({worker}) => {
+	it('should keep the live region in the collapsed menu layout while an operation runs', async ({worker}) => {
 		mockViewport(true);
 		const instance = createInstance('ACTIVE');
 		worker.use(
@@ -179,10 +181,59 @@ describe('<ProcessInstanceOperations /> (DS)', () => {
 		);
 		const screen = await renderOperations(instance);
 
+		await expect.element(screen.getByRole('status')).toBeInTheDocument();
+
 		await userEvent.click(screen.getByRole('button', {name: 'Actions'}));
 		await userEvent.click(screen.getByRole('menuitem', {name: 'Suspend'}));
 
-		await expect.element(screen.getByRole('status')).toBeVisible();
+		await expect.element(screen.getByText('Instance suspended')).toBeVisible();
+	});
+
+	it('should show the failed state and an error notification when an operation fails', async ({worker}) => {
+		mockViewport(true);
+		const instance = createInstance('ACTIVE');
+		worker.use(
+			mockSuspendProcessInstanceEndpoint({
+				successResponse: HttpResponse.json(createProblemDetails({status: 500}), {status: 500}),
+			}),
+		);
+		const screen = await renderOperations(instance);
+
+		await userEvent.click(screen.getByRole('button', {name: 'Actions'}));
+		await userEvent.click(screen.getByRole('menuitem', {name: 'Suspend'}));
+
+		await expect.element(screen.getByText('Failed', {exact: true})).toBeVisible();
+		await expect.element(screen.getByText('Failed to suspend process instance')).toBeVisible();
+	});
+
+	it('should show a permission warning when suspending is forbidden', async ({worker}) => {
+		const instance = createInstance('ACTIVE');
+		worker.use(
+			mockSuspendProcessInstanceEndpoint({
+				successResponse: HttpResponse.json(createProblemDetails({status: 403}), {status: 403}),
+			}),
+		);
+		const screen = await renderOperations(instance);
+
+		await userEvent.click(screen.getByRole('button', {name: `Suspend Instance ${instance.processInstanceKey}`}));
+
+		await expect.element(screen.getByText("You don't have permission to perform this operation")).toBeVisible();
+		await expect.element(screen.getByText('Contact the administrator if you need access.')).toBeVisible();
+	});
+
+	it('should show a permission warning when resuming is forbidden', async ({worker}) => {
+		const instance = createInstance('SUSPENDED');
+		worker.use(
+			mockResumeProcessInstanceEndpoint({
+				successResponse: HttpResponse.json(createProblemDetails({status: 403}), {status: 403}),
+			}),
+		);
+		const screen = await renderOperations(instance);
+
+		await userEvent.click(screen.getByRole('button', {name: `Resume Instance ${instance.processInstanceKey}`}));
+
+		await expect.element(screen.getByText("You don't have permission to perform this operation")).toBeVisible();
+		await expect.element(screen.getByText('Contact the administrator if you need access.')).toBeVisible();
 	});
 
 	it('should keep the delete button visible for finished instances when collapsed', async () => {

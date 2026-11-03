@@ -23,7 +23,11 @@ class OperatePreviewProcessInstancePage extends BasePage {
 	}
 
 	get header() {
-		return this.page.getByRole('table').first();
+		return this.page.getByRole('group', {name: 'Instance header'});
+	}
+
+	get breadcrumb() {
+		return this.page.getByRole('navigation', {name: 'breadcrumb'});
 	}
 
 	get diagramPanelPlaceholder() {

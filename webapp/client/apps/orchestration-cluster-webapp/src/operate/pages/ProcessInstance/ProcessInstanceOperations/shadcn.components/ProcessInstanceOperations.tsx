@@ -25,10 +25,10 @@ import {CancelConfirmationModal} from '#/operate/shared/Operations/shadcn.compon
 import {DeleteConfirmationModal} from '#/operate/shared/Operations/shadcn.components/DeleteConfirmationModal';
 import {useMatchMedia} from '#/operate/shared/useMatchMedia';
 import {useProcessInstancePage} from '#/operate/pages/ProcessInstance/useProcessInstancePage';
+import {COLLAPSED_LAYOUT_QUERY} from '../../shadcn.components/collapsedLayoutQuery';
 import {processInstanceHeaderOperationMachine, type HeaderAction} from '../processInstanceHeaderOperationMachine';
 
-// Carbon's "xlg" breakpoint (82rem); the DS operations must collapse at the same width as the Carbon ones.
-const COLLAPSED_QUERY = '(max-width: 82rem)';
+const getRootInstancePath = (rootInstanceId: string) => `/operate-preview/processes/${rootInstanceId}`;
 
 const ICONS = {retry: RotateCcw, cancel: Ban, delete: undefined, suspend: CirclePause, resume: CirclePlay};
 
@@ -59,7 +59,7 @@ const ProcessInstanceOperations: React.FC = () => {
 	const {processInstance} = useProcessInstancePage();
 	const {processInstanceKey, state, hasIncident} = processInstance;
 	const {t} = useTranslation();
-	const isCollapsed = useMatchMedia(COLLAPSED_QUERY);
+	const isCollapsed = useMatchMedia(COLLAPSED_LAYOUT_QUERY);
 	const [confirmation, setConfirmation] = useState<'cancel' | 'delete' | null>(null);
 	const retry = useHeaderOperation('retry', processInstanceKey);
 	const cancel = useHeaderOperation('cancel', processInstanceKey);
@@ -108,19 +108,21 @@ const ProcessInstanceOperations: React.FC = () => {
 		}
 	};
 
-	const renderStatus = ({action, status}: (typeof operations)[number]) => {
+	const renderStatusContent = ({action, status}: (typeof operations)[number]) => {
 		const Icon = status === 'pending' ? LoaderCircle : status === 'success' ? CircleCheck : CircleAlert;
 		return (
-			<span key={action} role="status" aria-live="polite" className="flex items-center gap-2 text-sm whitespace-nowrap">
+			<>
 				<Icon aria-hidden="true" className={status === 'pending' ? 'size-4 animate-spin' : 'size-4'} />
 				{status === 'pending'
 					? pendingLabels[action]
 					: status === 'success'
 						? t('operate.processInstance.operations.successful')
 						: t('operate.processInstance.operations.failed')}
-			</span>
+			</>
 		);
 	};
+
+	const activeOperation = operations.find(({status}) => status !== 'idle');
 
 	return (
 		<>
@@ -144,13 +146,24 @@ const ProcessInstanceOperations: React.FC = () => {
 							})}
 						</DropdownMenuContent>
 					</DropdownMenu>
-					{operations.filter(({status}) => status !== 'idle').map(renderStatus)}
+					<span role="status" aria-live="polite" className="flex items-center gap-2 text-sm whitespace-nowrap">
+						{activeOperation !== undefined && renderStatusContent(activeOperation)}
+					</span>
 				</>
 			) : (
 				operations.map((operation) => {
 					const {action, status, execute: run} = operation;
 					if (status !== 'idle') {
-						return renderStatus(operation);
+						return (
+							<span
+								key={action}
+								role="status"
+								aria-live="polite"
+								className="flex items-center gap-2 text-sm whitespace-nowrap"
+							>
+								{renderStatusContent(operation)}
+							</span>
+						);
 					}
 					const Icon = ICONS[action];
 					return (
@@ -172,7 +185,7 @@ const ProcessInstanceOperations: React.FC = () => {
 				<CancelConfirmationModal
 					processInstanceKey={processInstanceKey}
 					open
-					getRootInstancePath={(rootInstanceId) => `/operate-preview/processes/${rootInstanceId}`}
+					getRootInstancePath={getRootInstancePath}
 					onCancel={() => setConfirmation(null)}
 					onConfirm={() => {
 						setConfirmation(null);

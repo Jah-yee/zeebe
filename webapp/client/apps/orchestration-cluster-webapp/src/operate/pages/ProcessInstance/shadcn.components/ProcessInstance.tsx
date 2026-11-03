@@ -18,7 +18,7 @@ type Props = {
 	activeTab: ProcessInstanceTab;
 	onTabChange?: (tab: ProcessInstanceTab) => void;
 	breadcrumb?: React.ReactNode;
-	header?: React.ReactNode;
+	header: React.ReactNode;
 	children?: React.ReactNode;
 };
 
@@ -39,13 +39,7 @@ const ProcessInstance: React.FC<Props> = ({activeTab, onTabChange, breadcrumb, h
 			</Heading>
 			<div className="flex min-h-0 flex-1 flex-col">
 				{breadcrumb}
-				{header ?? (
-					<header className="border-b border-border">
-						<Text as="p" className="p-4 text-sm text-neutral-foreground-subtle">
-							{t('operate.processInstance.scaffold.headerPlaceholder')}
-						</Text>
-					</header>
-				)}
+				{header}
 				<div className="flex min-h-0 flex-1 overflow-hidden">
 					<div ref={containerRef} className="min-h-0 min-w-0 flex-1 overflow-hidden">
 						<ResizablePanel
