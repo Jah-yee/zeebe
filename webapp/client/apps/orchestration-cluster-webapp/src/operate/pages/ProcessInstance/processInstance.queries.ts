@@ -10,6 +10,7 @@ import {queryOptions, useQuery} from '@tanstack/react-query';
 import type {
 	GetProcessInstanceWaitStateStatisticsResponseBody,
 	ProcessInstance,
+	QueryBatchOperationItemsResponseBody,
 	QueryProcessInstanceIncidentsResponseBody,
 	QueryElementInstancesRequestBody,
 	QuerySortOrder,
@@ -36,6 +37,28 @@ async function instanceRequest<T>(input: Request, signal: AbortSignal): Promise<
 		throw mapQueryError(error);
 	}
 	return response.json();
+}
+
+function instanceLastMigrationQuery(processInstanceKey: string) {
+	return queryOptions({
+		queryKey: ['instanceLastMigration', processInstanceKey] as const,
+		queryFn: async ({signal}): Promise<string | null> => {
+			const result = await instanceRequest<QueryBatchOperationItemsResponseBody>(
+				endpoints.queryBatchOperationItems({
+					filter: {
+						processInstanceKey,
+						operationType: 'MIGRATE_PROCESS_INSTANCE',
+						state: 'COMPLETED',
+					},
+					sort: [{field: 'processedDate', order: 'DESC'}],
+					page: {from: 0, limit: 1},
+				}),
+				signal,
+			);
+			return result.items[0]?.processedDate ?? null;
+		},
+		retry: false,
+	});
 }
 
 function processInstanceQuery(processInstanceKey: string) {
@@ -163,6 +186,7 @@ export {
 	SELECTION_INCIDENTS_COUNT_KEY,
 	getProcessInstanceErrorKind,
 	historySort,
+	instanceLastMigrationQuery,
 	instanceRequest,
 	processInstanceQuery,
 	processInstanceIncidentsCountQuery,
