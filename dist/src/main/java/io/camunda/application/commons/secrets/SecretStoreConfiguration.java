@@ -39,6 +39,7 @@ import java.time.InstantSource;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -60,16 +61,22 @@ public class SecretStoreConfiguration {
    * One entry per supported secret store type. Adding a new backend means adding a single binding
    * here (plus its factory method) — the per-tenant count check and registration loop below are
    * type-agnostic and never need to change.
+   *
+   * @param environment the variables an environment-variable store snapshots
    */
-  private static final List<StoreBinding<?>> STORE_BINDINGS =
-      List.of(
-          new StoreBinding<>("file", "file", Stores::getFile, SecretStoreConfiguration::fileStore),
-          new StoreBinding<>(
-              "aws", "AWS Secrets Manager", Stores::getAws, SecretStoreConfiguration::awsStore),
-          new StoreBinding<>(
-              "gcp", "GCP Secret Manager", Stores::getGcp, SecretStoreConfiguration::gcpStore),
-          new StoreBinding<>(
-              "env", "environment variable", Stores::getEnv, SecretStoreConfiguration::envStore));
+  private static List<StoreBinding<?>> storeBindings(final SecretStoreEnvironment environment) {
+    return List.of(
+        new StoreBinding<>("file", "file", Stores::getFile, SecretStoreConfiguration::fileStore),
+        new StoreBinding<>(
+            "aws", "AWS Secrets Manager", Stores::getAws, SecretStoreConfiguration::awsStore),
+        new StoreBinding<>(
+            "gcp", "GCP Secret Manager", Stores::getGcp, SecretStoreConfiguration::gcpStore),
+        new StoreBinding<>(
+            "env",
+            "environment variable",
+            Stores::getEnv,
+            (storeId, tenantId, config) -> envStore(storeId, tenantId, config, environment)));
+  }
 
   /**
    * @param meterRegistry the cluster-wide registry each physical tenant's secret cache meters are
@@ -78,12 +85,17 @@ public class SecretStoreConfiguration {
    *     its pools — a store ID is unique only within a tenant, so without that tag two tenants
    *     using the same store ID would register the same series twice: Micrometer hands back the
    *     meter that already exists, and the two caches silently share it.
+   * @param environment replaces the process environment that environment-variable stores read; no
+   *     such bean exists in production, so they read {@link System#getenv()}. Only a test that
+   *     registers one, for a broker running inside its own JVM, ever supplies it
    */
   @Bean
   public SecretStoreRegistries secretStoreRegistries(
       final PhysicalTenantResolver resolver,
       final ActorClockService clockService,
-      final MeterRegistry meterRegistry) {
+      final MeterRegistry meterRegistry,
+      final Optional<SecretStoreEnvironment> environment) {
+    final var bindings = storeBindings(environment.orElse(System::getenv));
     final Map<String, SecretStoreRegistry> registries = new LinkedHashMap<>();
     // tracks everything built across all tenants processed so far, so a failure partway through
     // (e.g. a later tenant's AWS store failing to build) can release it instead of leaking clients,
@@ -97,7 +109,8 @@ public class SecretStoreConfiguration {
               (tenantId, secrets) ->
                   registries.put(
                       tenantId,
-                      buildRegistry(tenantId, secrets, resources, timeSource, meterRegistry)));
+                      buildRegistry(
+                          tenantId, secrets, resources, timeSource, meterRegistry, bindings)));
     } catch (final Throwable e) {
       try {
         resources.close();
@@ -115,11 +128,12 @@ public class SecretStoreConfiguration {
       final Secrets secrets,
       final SecretStoreResources resources,
       final InstantSource timeSource,
-      final MeterRegistry meterRegistry) {
+      final MeterRegistry meterRegistry,
+      final List<StoreBinding<?>> bindings) {
     final Stores config = secrets.getStores();
     // cap is one store total per tenant, counted across all store types combined
     final long totalStores =
-        STORE_BINDINGS.stream().mapToLong(binding -> binding.ids(config).size()).sum();
+        bindings.stream().mapToLong(binding -> binding.ids(config).size()).sum();
     if (totalStores > 1) {
       throw new IllegalStateException(
           "Physical tenant '"
@@ -132,7 +146,7 @@ public class SecretStoreConfiguration {
     // error rather than whatever the store's own construction fails with — an AWS or GCP store
     // eagerly builds a client and probes credentials, which would otherwise surface first for a
     // configuration that is rejected anyway
-    STORE_BINDINGS.forEach(binding -> binding.requireSupportedStoreIds(config, tenantId));
+    bindings.forEach(binding -> binding.requireSupportedStoreIds(config, tenantId));
     // read before any store is built, for the same reason: an out-of-bounds ttl/max-size fails
     // startup without first constructing an AWS/GCP client only to roll it back again
     final Secrets.Cache cacheConfig;
@@ -162,7 +176,7 @@ public class SecretStoreConfiguration {
           e);
     }
     final Map<String, SecretStore> stores = new LinkedHashMap<>();
-    STORE_BINDINGS.forEach(binding -> binding.registerAll(config, stores, resources, tenantId));
+    bindings.forEach(binding -> binding.registerAll(config, stores, resources, tenantId));
     if (stores.isEmpty()) {
       stores.put(SecretStoreRegistry.DEFAULT_STORE_ID, NOOP_STORE);
       LOG.info("No secret stores configured for physical tenant '{}', using noop store", tenantId);
@@ -327,11 +341,16 @@ public class SecretStoreConfiguration {
   }
 
   private static SecretStore envStore(
-      final String storeId, final String tenantId, final EnvStore config) {
+      final String storeId,
+      final String tenantId,
+      final EnvStore config,
+      final SecretStoreEnvironment environment) {
     final var prefix = config.getPrefix();
     final SecretStore store;
     try {
-      store = EnvVarSecretStore.fromConfig(new EnvVarSecretStoreConfig(prefix, System.getenv()));
+      store =
+          EnvVarSecretStore.fromConfig(
+              new EnvVarSecretStoreConfig(prefix, environment.variables()));
     } catch (final IllegalArgumentException invalidPrefix) {
       throw new IllegalStateException(
           "Environment-variable store '%s' for physical tenant '%s' has an invalid %s.%s.prefix: %s"

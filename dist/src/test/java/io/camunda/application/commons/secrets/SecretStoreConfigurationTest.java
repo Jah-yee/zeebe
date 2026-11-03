@@ -45,9 +45,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.awaitility.Awaitility;
@@ -340,7 +342,9 @@ class SecretStoreConfigurationTest {
     final var clusterRegistry = new CompositeMeterRegistry();
     clusterRegistry.add(backend);
     final var registries =
-        CONFIG.secretStoreRegistries(resolver, CLOCK_SERVICE, clusterRegistry).byPhysicalTenant();
+        CONFIG
+            .secretStoreRegistries(resolver, CLOCK_SERVICE, clusterRegistry, Optional.empty())
+            .byPhysicalTenant();
 
     // when only one tenant resolves the name both stores hold
     registries
@@ -361,7 +365,9 @@ class SecretStoreConfigurationTest {
     final var resolver = resolverFor(Map.of());
     final var meterRegistry = new SimpleMeterRegistry();
     final var registries =
-        CONFIG.secretStoreRegistries(resolver, CLOCK_SERVICE, meterRegistry).byPhysicalTenant();
+        CONFIG
+            .secretStoreRegistries(resolver, CLOCK_SERVICE, meterRegistry, Optional.empty())
+            .byPhysicalTenant();
 
     // when it is resolved through
     registries
@@ -429,7 +435,8 @@ class SecretStoreConfigurationTest {
     final var clockService = new ControlledActorClockService(new ControlledActorClock());
     final var registries =
         CONFIG
-            .secretStoreRegistries(resolver, clockService, new SimpleMeterRegistry())
+            .secretStoreRegistries(
+                resolver, clockService, new SimpleMeterRegistry(), Optional.empty())
             .byPhysicalTenant();
     final var store =
         registries
@@ -499,7 +506,8 @@ class SecretStoreConfigurationTest {
       final var meterRegistry = new SimpleMeterRegistry();
       final var resolver =
           resolverFor(Map.of("camunda.secrets.stores.file.default.path", secretsDir.toString()));
-      final var registries = CONFIG.secretStoreRegistries(resolver, CLOCK_SERVICE, meterRegistry);
+      final var registries =
+          CONFIG.secretStoreRegistries(resolver, CLOCK_SERVICE, meterRegistry, Optional.empty());
       registries
           .forPhysicalTenant(PhysicalTenantIds.DEFAULT_PHYSICAL_TENANT_ID)
           .getStores()
@@ -567,6 +575,56 @@ class SecretStoreConfigurationTest {
   }
 
   @Test
+  void shouldBuildEnvVarStoreOverTheProcessEnvironmentWhenNoneIsSupplied() {
+    // given an env store, and no SecretStoreEnvironment bean, as in production
+    final var resolver =
+        resolverFor(Map.of("camunda.secrets.stores.env.default.prefix", "APP_SECRET_"));
+    final List<Object> environments = new ArrayList<>();
+
+    // when
+    try (var construction =
+        mockConstruction(
+            EnvVarSecretStore.class,
+            (mock, context) -> environments.add(context.arguments().get(0)))) {
+      registries(resolver);
+    }
+
+    // then
+    assertThat(environments).containsExactly(System.getenv());
+  }
+
+  @Test
+  void shouldBuildEachPhysicalTenantsEnvVarStoreOverTheSuppliedEnvironment() {
+    // given two tenants with distinct prefixes, and an environment holding a value for each
+    final Map<String, Object> properties =
+        new HashMap<>(tenantWithEnvStore("tenanta", "TENANTA_SECRET_"));
+    properties.putAll(tenantWithEnvStore("tenantb", "TENANTB_SECRET_"));
+    final SecretStoreEnvironment environment =
+        () ->
+            Map.of(
+                "TENANTA_SECRET_API_KEY", "a-value",
+                "TENANTB_SECRET_API_KEY", "b-value",
+                "TENANTB_SECRET_ONLY_B", "only-b");
+
+    // when
+    final var registries =
+        CONFIG.secretStoreRegistries(
+            resolverFor(properties),
+            CLOCK_SERVICE,
+            new SimpleMeterRegistry(),
+            Optional.of(environment));
+
+    // then each tenant's store reads the supplied environment, through its own prefix only
+    assertThat(defaultStoreOf(registries, "tenanta").resolve(Set.of("API_KEY")))
+        .containsEntry("API_KEY", new Resolved("a-value"));
+    assertThat(defaultStoreOf(registries, "tenantb").resolve(Set.of("API_KEY")))
+        .containsEntry("API_KEY", new Resolved("b-value"));
+    assertThat(defaultStoreOf(registries, "tenanta").list()).containsExactly("API_KEY");
+    assertThat(defaultStoreOf(registries, "tenantb").list())
+        .containsExactlyInAnyOrder("API_KEY", "ONLY_B");
+  }
+
+  @Test
   void shouldHandOutTheEnvVarStoreWithoutACacheInFrontOfIt() {
     // given an env store, which already holds every value in memory
     final var resolver =
@@ -576,7 +634,7 @@ class SecretStoreConfigurationTest {
     // when it is resolved through
     final var store =
         CONFIG
-            .secretStoreRegistries(resolver, CLOCK_SERVICE, meterRegistry)
+            .secretStoreRegistries(resolver, CLOCK_SERVICE, meterRegistry, Optional.empty())
             .byPhysicalTenant()
             .get(PhysicalTenantIds.DEFAULT_PHYSICAL_TENANT_ID)
             .getStores()
@@ -670,7 +728,10 @@ class SecretStoreConfigurationTest {
 
       // when / then — the build fails and the failure propagates, whether an Exception or an Error
       // (Mockito may wrap the construction failure, so only the root cause is asserted)
-      assertThatThrownBy(() -> CONFIG.secretStoreRegistries(resolver, CLOCK_SERVICE, meterRegistry))
+      assertThatThrownBy(
+              () ->
+                  CONFIG.secretStoreRegistries(
+                      resolver, CLOCK_SERVICE, meterRegistry, Optional.empty()))
           .satisfies(
               thrown ->
                   assertThat(thrown.getCause() == null ? thrown : rootCause(thrown))
@@ -722,7 +783,8 @@ class SecretStoreConfigurationTest {
       // when / then — the rollback failure rides along instead of replacing the startup failure
       assertThatThrownBy(
               () ->
-                  CONFIG.secretStoreRegistries(resolver, CLOCK_SERVICE, new SimpleMeterRegistry()))
+                  CONFIG.secretStoreRegistries(
+                      resolver, CLOCK_SERVICE, new SimpleMeterRegistry(), Optional.empty()))
           .satisfies(
               thrown -> {
                 final var origin = thrown.getCause() == null ? thrown : rootCause(thrown);
@@ -828,7 +890,8 @@ class SecretStoreConfigurationTest {
     final var clockService = new ControlledActorClockService(new ControlledActorClock());
     final var registries =
         CONFIG
-            .secretStoreRegistries(resolver, clockService, new SimpleMeterRegistry())
+            .secretStoreRegistries(
+                resolver, clockService, new SimpleMeterRegistry(), Optional.empty())
             .byPhysicalTenant();
     final var tenanta =
         registries.get("tenanta").getStores().get(SecretStoreRegistry.DEFAULT_STORE_ID);
@@ -999,7 +1062,7 @@ class SecretStoreConfigurationTest {
   private static LocallyCachedSecretStore defaultTenantStore(
       final PhysicalTenantResolver resolver, final ActorClockService clockService) {
     return CONFIG
-        .secretStoreRegistries(resolver, clockService, new SimpleMeterRegistry())
+        .secretStoreRegistries(resolver, clockService, new SimpleMeterRegistry(), Optional.empty())
         .byPhysicalTenant()
         .get(PhysicalTenantIds.DEFAULT_PHYSICAL_TENANT_ID)
         .getStores()
@@ -1051,7 +1114,8 @@ class SecretStoreConfigurationTest {
   }
 
   private static SecretStoreRegistries registries(final PhysicalTenantResolver resolver) {
-    return CONFIG.secretStoreRegistries(resolver, CLOCK_SERVICE, new SimpleMeterRegistry());
+    return CONFIG.secretStoreRegistries(
+        resolver, CLOCK_SERVICE, new SimpleMeterRegistry(), Optional.empty());
   }
 
   private static PhysicalTenantResolver resolverFor(final Map<String, Object> properties) {
