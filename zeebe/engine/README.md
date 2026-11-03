@@ -340,8 +340,9 @@ exercising the same code paths the engine uses in production, so the resulting s
 engine can actually reach.
 
 - **Don't** call state writers (or otherwise mutate `MutableProcessingState`) from a test.
-- **Do** reach the desired state by writing the relevant commands or events, for example with the
-  test clients exposed by `EngineRule` or by appending an event to the log stream.
+- **Do** reach the desired state by submitting commands through the test clients exposed by
+  `EngineRule`. To seed state with an event instead, stop the engine, append the event to the log
+  stream, and restart the engine so the event is replayed and applied before the test continues.
 
 ### Follow-up tasks
 
