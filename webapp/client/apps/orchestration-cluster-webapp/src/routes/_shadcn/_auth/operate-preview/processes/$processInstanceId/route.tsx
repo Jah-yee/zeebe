@@ -6,6 +6,7 @@
  * except in compliance with the Camunda License 1.0.
  */
 
+import {useEffect} from 'react';
 import {
 	createFileRoute,
 	Outlet,
@@ -19,6 +20,7 @@ import {t} from 'i18next';
 import {ProcessInstance} from '#/operate/pages/ProcessInstance/shadcn.components/ProcessInstance';
 import {
 	getProcessInstanceTabFromPath,
+	getVisibleProcessInstanceTabs,
 	type ProcessInstanceTab,
 } from '#/operate/pages/ProcessInstance/shadcn.components/processInstanceTabs';
 import {ProcessInstanceBreadcrumb} from '#/operate/pages/ProcessInstance/shadcn.components/ProcessInstanceBreadcrumb';
@@ -84,6 +86,27 @@ export const Route = createFileRoute('/_shadcn/_auth/operate-preview/processes/$
 						search: true,
 						hash: true,
 					});
+				case 'input-mappings':
+					return navigate({
+						to: '/operate-preview/processes/$processInstanceId/input-mappings',
+						params: {processInstanceId},
+						search: true,
+						hash: true,
+					});
+				case 'output-mappings':
+					return navigate({
+						to: '/operate-preview/processes/$processInstanceId/output-mappings',
+						params: {processInstanceId},
+						search: true,
+						hash: true,
+					});
+				case 'operations-log':
+					return navigate({
+						to: '/operate-preview/processes/$processInstanceId/operations-log',
+						params: {processInstanceId},
+						search: true,
+						hash: true,
+					});
 				case 'listeners':
 					return navigate({
 						to: '/operate-preview/processes/$processInstanceId/listeners',
@@ -109,6 +132,23 @@ export const Route = createFileRoute('/_shadcn/_auth/operate-preview/processes/$
 			}
 		};
 
+		const hasSelection = Boolean(search.elementId || search.elementInstanceKey);
+		const visibleTabs = getVisibleProcessInstanceTabs(hasSelection);
+		const activeTab = getProcessInstanceTabFromPath(pathname);
+		const isActiveTabHidden = !visibleTabs.includes(activeTab);
+
+		useEffect(() => {
+			if (isActiveTabHidden) {
+				void navigate({
+					to: '/operate-preview/processes/$processInstanceId/variables',
+					params: {processInstanceId},
+					search: true,
+					hash: true,
+					replace: true,
+				});
+			}
+		}, [isActiveTabHidden, navigate, processInstanceId]);
+
 		return (
 			<ProcessInstancePageProvider
 				processInstanceId={processInstanceId}
@@ -116,7 +156,8 @@ export const Route = createFileRoute('/_shadcn/_auth/operate-preview/processes/$
 				search={search}
 			>
 				<ProcessInstance
-					activeTab={getProcessInstanceTabFromPath(pathname)}
+					activeTab={activeTab}
+					visibleTabs={visibleTabs}
 					onTabChange={(tab) => void changeTab(tab)}
 					breadcrumb={
 						hierarchy && hierarchy.length > 1 ? (
