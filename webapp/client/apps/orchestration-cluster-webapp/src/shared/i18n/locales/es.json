@@ -2026,6 +2026,8 @@
 					"operations": "Operaciones",
 					"retryIncident": "Reintentar incidente",
 					"expandRow": "Expandir fila",
+					"collapseRow": "Contraer fila",
+					"selectedRow": "Seleccionado",
 					"jobId": "ID del job",
 					"more": "Más",
 					"errorModalTitle": "Error del elemento \"{{name}}\"",

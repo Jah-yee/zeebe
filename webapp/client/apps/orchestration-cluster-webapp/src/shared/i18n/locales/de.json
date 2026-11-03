@@ -2026,6 +2026,8 @@
 					"operations": "Operationen",
 					"retryIncident": "Incident wiederholen",
 					"expandRow": "Zeile erweitern",
+					"collapseRow": "Zeile reduzieren",
+					"selectedRow": "Ausgewählt",
 					"jobId": "Job-ID",
 					"more": "Mehr",
 					"errorModalTitle": "Fehler im Element \"{{name}}\"",

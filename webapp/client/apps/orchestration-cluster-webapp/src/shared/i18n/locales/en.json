@@ -2038,6 +2038,8 @@
 					"operations": "Operations",
 					"retryIncident": "Retry Incident",
 					"expandRow": "Expand row",
+					"collapseRow": "Collapse row",
+					"selectedRow": "Selected",
 					"jobId": "Job ID",
 					"more": "More",
 					"errorModalTitle": "Element \"{{name}}\" Error",
