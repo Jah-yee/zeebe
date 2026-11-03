@@ -124,6 +124,11 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 		page,
 	}) => {
 		network.use(
+			mockGetProcessInstanceEndpoint({
+				successResponse: HttpResponse.json(
+					createProcessInstance({processInstanceKey: PROCESS_INSTANCE_ID, hasIncident: true}),
+				),
+			}),
 			mockQueryProcessInstanceIncidentsEndpoint({
 				successResponse: HttpResponse.json(
 					createPaginatedResponse({
@@ -137,7 +142,7 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
 		await operatePreviewProcessInstancePage.incidentsTab.click();
 
-		const row = operatePreviewProcessInstancePage.incidentsTable.getByRole('row', {name: /Payment failed/});
+		const row = operatePreviewProcessInstancePage.incidentsTable.getByRole('row').filter({hasText: 'Payment failed'});
 		await expect(row).toBeVisible();
 
 		await row.click();
