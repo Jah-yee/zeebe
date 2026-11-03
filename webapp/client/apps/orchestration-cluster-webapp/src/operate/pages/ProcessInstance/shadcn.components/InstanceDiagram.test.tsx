@@ -52,6 +52,9 @@ const STATISTICS = [
 	createProcessDefinitionStatistic({elementId: 'end_1', completed: 1}),
 ];
 
+const getDiagramElement = (elementId: string) =>
+	document.querySelector<SVGElement>(`[data-element-id="${elementId}"]`)!;
+
 const singleResult = <T,>(item: T) => ({
 	items: [item],
 	page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
@@ -163,9 +166,9 @@ describe('<InstanceDiagram /> (DS)', () => {
 		);
 
 		const screen = await renderPage();
-		await expect.element(screen.getByTestId('diagram-spinner')).toBeVisible();
+		await expect.element(screen.getByRole('status', {name: 'Loading diagram'})).toBeVisible();
 		releaseXml();
-		await expect.element(screen.getByTestId('diagram-spinner')).not.toBeInTheDocument();
+		await expect.element(screen.getByRole('status', {name: 'Loading diagram'})).not.toBeInTheDocument();
 		await expect.element(screen.getByRole('button', {name: 'Reset diagram zoom'})).toBeVisible();
 	});
 
@@ -211,19 +214,13 @@ describe('<InstanceDiagram /> (DS)', () => {
 
 		const screen = await renderPage();
 
-		await expect.element(screen.getByTestId('instance-state-task_1-active')).toHaveTextContent('2');
-		await expect
-			.element(screen.getByTestId('instance-state-task_1-incidents'))
-			.toHaveAttribute('title', 'Review, Incidents: 1');
-		await expect.element(screen.getByTestId('instance-state-end_1-completedEndEvents')).toBeVisible();
-		await expect.element(screen.getByTestId('instance-waiting-task_1')).toHaveTextContent('2 waiting');
-		await expect
-			.element(screen.getByTestId('instance-agent-call_1'))
-			.toHaveTextContent('Thinking... + 1 more active agent');
-		await expect.element(screen.getByTestId('instance-agent-shine-call_1')).toBeVisible();
-		await expect.element(screen.getByTestId('instance-waiting-call_1')).not.toBeInTheDocument();
-		await expect.element(screen.getByTestId('instance-waiting-Process_1')).not.toBeInTheDocument();
-		await expect.element(screen.getByTestId('instance-state-task_1-completed')).not.toBeInTheDocument();
+		await expect.element(screen.getByRole('img', {name: 'Review, Active: 2'})).toHaveTextContent('2');
+		await expect.element(screen.getByRole('img', {name: 'Review, Incidents: 1'})).toBeVisible();
+		await expect.element(screen.getByRole('img', {name: 'Completed: 1', exact: true})).toBeVisible();
+		await expect.element(screen.getByText('2 waiting')).toBeVisible();
+		await expect.element(screen.getByText('Thinking... + 1 more active agent')).toBeVisible();
+		await expect.element(screen.getByText('Waiting', {exact: true})).not.toBeInTheDocument();
+		await expect.element(screen.getByRole('img', {name: 'Review, Completed: 3'})).not.toBeInTheDocument();
 	});
 
 	it('should synchronize selection and clear the instance key when the selected node is clicked', async ({worker}) => {
@@ -231,15 +228,13 @@ describe('<InstanceDiagram /> (DS)', () => {
 
 		const screen = await renderLoadedPage('?elementId=task_1&elementInstanceKey=instance-2');
 
-		await userEvent.click(document.querySelector<SVGElement>('[data-element-id="task_1"]')!);
+		await userEvent.click(getDiagramElement('task_1'));
 		await expect
 			.poll(() => processInstanceSearchSchema.parse(screen.router.state.location.search).elementInstanceKey)
 			.toBeUndefined();
 		expect(processInstanceSearchSchema.parse(screen.router.state.location.search).elementId).toBe('task_1');
 
-		await userEvent.click(document.querySelector<HTMLElement>('[data-testid="diagram-canvas"]')!, {
-			position: {x: 5, y: 5},
-		});
+		await userEvent.click(screen.getByRole('region', {name: 'Diagram'}), {position: {x: 5, y: 5}});
 		await expect
 			.poll(() => processInstanceSearchSchema.parse(screen.router.state.location.search).elementId)
 			.toBeUndefined();
@@ -277,7 +272,7 @@ describe('<InstanceDiagram /> (DS)', () => {
 
 		const screen = await renderLoadedPage('?elementId=task_1');
 
-		await userEvent.dblClick(document.querySelector<SVGElement>('[data-element-id="call_1"]')!);
+		await userEvent.dblClick(getDiagramElement('call_1'));
 
 		await expect.poll(() => screen.router.state.location.pathname).toBe('/operate-preview/processes/child-1/details');
 		expect(processInstanceSearchSchema.parse(screen.router.state.location.search).elementId).toBeUndefined();
@@ -295,7 +290,7 @@ describe('<InstanceDiagram /> (DS)', () => {
 		);
 
 		const screen = await renderLoadedPage();
-		await userEvent.dblClick(document.querySelector<SVGElement>('[data-element-id="rule_1"]')!);
+		await userEvent.dblClick(getDiagramElement('rule_1'));
 
 		await expect.poll(() => screen.router.state.location.pathname).toBe('/operate-preview/decisions/decision-1');
 	});
@@ -309,10 +304,27 @@ describe('<InstanceDiagram /> (DS)', () => {
 		);
 
 		await renderLoadedPage();
-		await userEvent.dblClick(document.querySelector<SVGElement>('[data-element-id="call_1"]')!);
+		await userEvent.dblClick(getDiagramElement('call_1'));
 
 		await expect
 			.poll(() => notificationsStore.notifications.map(({title}) => title))
 			.toContain('Failed to resolve called instances');
+	});
+
+	it('should cancel a pending drilldown when another element is selected', async ({worker}) => {
+		worker.use(
+			...handlers(),
+			mockQueryElementInstancesEndpoint({
+				successResponse: HttpResponse.json(singleResult({elementInstanceKey: 'element-1'})),
+				delay: 'infinite',
+			}),
+		);
+
+		await renderLoadedPage();
+		await userEvent.dblClick(getDiagramElement('call_1'));
+		await expect.poll(() => getDiagramElement('call_1').classList.contains('op-drilldown-loading')).toBe(true);
+		await userEvent.click(getDiagramElement('task_1'));
+
+		await expect.poll(() => getDiagramElement('call_1').classList.contains('op-drilldown-loading')).toBe(false);
 	});
 });

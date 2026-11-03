@@ -56,12 +56,8 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 		await expect(operatePreviewProcessInstancePage.heading).toBeAttached();
 		await expect(operatePreviewProcessInstancePage.header).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.diagram).toBeVisible();
-		await expect(
-			operatePreviewProcessInstancePage.diagramPanel.getByTestId('instance-state-task-1-active'),
-		).toBeVisible();
-		await expect(
-			operatePreviewProcessInstancePage.diagramPanel.getByTestId('instance-state-task-1-incidents'),
-		).toBeVisible();
+		await expect(operatePreviewProcessInstancePage.stateOverlay('Review invoice, Active: 1')).toBeVisible();
+		await expect(operatePreviewProcessInstancePage.stateOverlay('Review invoice, Incidents: 1')).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.bottomPanelPlaceholder).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.variablesTab).toBeVisible();
 	});

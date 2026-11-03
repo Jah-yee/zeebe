@@ -45,7 +45,7 @@ describe('<ProcessInstance activeTab="variables" header={HEADER} /> (DS scaffold
 		const screen = await renderWithRouter(
 			() => (
 				<div style={{height: '800px'}} className="flex flex-col">
-					<ProcessInstance activeTab="variables" topPanel={<p>Instance diagram</p>} />
+					<ProcessInstance activeTab="variables" header={HEADER} topPanel={<p>Instance diagram</p>} />
 				</div>
 			),
 			{

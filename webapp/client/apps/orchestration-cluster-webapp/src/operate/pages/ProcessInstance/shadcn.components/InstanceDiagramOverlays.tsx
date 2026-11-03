@@ -52,7 +52,6 @@ const AgentShineOverlay: React.FC<Pick<OverlayEntry, 'container' | 'elementId'>>
 	return createPortal(
 		<span
 			ref={shineRef}
-			data-testid={`instance-agent-shine-${elementId}`}
 			className="instance-agent-shine pointer-events-none absolute -inset-px hidden p-0.5 opacity-70"
 		/>,
 		container,
@@ -69,7 +68,6 @@ const InstanceDiagramOverlays: React.FC<Props> = ({businessObjects}) => {
 			return (
 				<StateOverlay
 					key={`${elementId}-${elementState}`}
-					testId={`instance-state-${elementId}-${elementState}`}
 					state={elementState}
 					count={count}
 					container={container}
@@ -84,9 +82,8 @@ const InstanceDiagramOverlays: React.FC<Props> = ({businessObjects}) => {
 				<Text
 					as="span"
 					variant="label-md-strong"
-					data-testid={`instance-waiting-${elementId}`}
 					className={cn(
-						'inline-flex items-center rounded-full bg-amber-400 px-3 py-1 whitespace-nowrap tabular-nums text-black',
+						'inline-flex items-center rounded-full bg-warning-background-strong px-3 py-1 whitespace-nowrap text-warning-foreground-strong tabular-nums',
 						centered && '-translate-x-1/2',
 					)}
 				>
@@ -112,8 +109,7 @@ const InstanceDiagramOverlays: React.FC<Props> = ({businessObjects}) => {
 				<Text
 					as="span"
 					variant="label-md-strong"
-					data-testid={`instance-agent-${elementId}`}
-					className="inline-block rounded-full bg-background px-2 py-0.5 whitespace-nowrap text-[var(--primary-action-default)] shadow-[0_0_4px_var(--primary-action-default)]"
+					className="inline-block rounded-full bg-background px-2 py-0.5 whitespace-nowrap text-primary-action-default shadow-sm"
 				>
 					{label}
 					{additionalActiveCount > 0 && (

@@ -35,7 +35,11 @@ class OperatePreviewProcessInstancePage extends BasePage {
 	}
 
 	get diagram() {
-		return this.diagramPanel.getByTestId('diagram-canvas');
+		return this.diagramPanel.getByRole('region', {name: 'Diagram'});
+	}
+
+	stateOverlay(name: string) {
+		return this.diagramPanel.getByRole('img', {name, exact: true});
 	}
 
 	diagramElement(elementId: string) {

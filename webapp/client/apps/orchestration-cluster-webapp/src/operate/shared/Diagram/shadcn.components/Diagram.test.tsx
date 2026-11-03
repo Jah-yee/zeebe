@@ -45,7 +45,11 @@ function OverlayPortals() {
 
 function OverlayCount() {
 	const overlays = useContext(DiagramOverlayContext);
-	return <span data-testid="overlay-count">{overlays.length}</span>;
+	return (
+		<span role="status" aria-label="Overlay count">
+			{overlays.length}
+		</span>
+	);
 }
 
 function SelectedElementOverlay({selectedElementRef}: {selectedElementRef?: SVGElement}) {
@@ -69,7 +73,7 @@ describe('<Diagram />', () => {
 		);
 
 		await expect.element(screen.getByRole('button', {name: 'Reset diagram zoom'})).toBeVisible();
-		const diagram = document.querySelector<HTMLElement>('[data-testid="diagram"]')!;
+		const diagram = screen.getByRole('region', {name: 'Diagram'}).element();
 
 		expect(getComputedStyle(diagram).getPropertyValue('--cds-text-primary')).not.toBe('');
 		expect(getComputedStyle(diagram).getPropertyValue('--cds-layer-01')).not.toBe('');
@@ -209,7 +213,7 @@ describe('<Diagram />', () => {
 		);
 
 		await expect.element(screen.getByRole('button', {name: 'Reset diagram zoom'})).toBeVisible();
-		await expect.element(screen.getByTestId('overlay-count')).toHaveTextContent('0');
+		await expect.element(screen.getByRole('status', {name: 'Overlay count'})).toHaveTextContent('0');
 	});
 
 	it('should toggle minimap button label when shown and hidden', async () => {

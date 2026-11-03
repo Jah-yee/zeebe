@@ -29,6 +29,7 @@ import {
 import {useInstanceDiagramOverlays, type ModificationBadge} from '../useInstanceDiagramOverlays';
 import {InstanceHistoryContext} from '../useInstanceHistory';
 import {InstanceDiagramOverlays} from './InstanceDiagramOverlays';
+import {anchorStateOverlaysToCorners} from './anchorStateOverlaysToCorners';
 
 const NO_MODIFICATION_BADGES: ModificationBadge[] = [];
 
@@ -85,6 +86,7 @@ const InstanceDiagram: React.FC = () => {
 		isExecutionCountVisible,
 		modificationBadges: NO_MODIFICATION_BADGES,
 	});
+	const anchoredOverlaysData = useMemo(() => anchorStateOverlaysToCorners(overlaysData), [overlaysData]);
 	const selectableElements = useMemo(() => statistics.data?.map(({elementId}) => elementId) ?? [], [statistics.data]);
 	const selectedElementIds = useMemo(() => (selectedElementId ? [selectedElementId] : undefined), [selectedElementId]);
 	const highlightedElementIds = useMemo(
@@ -255,7 +257,6 @@ const InstanceDiagram: React.FC = () => {
 				isDismissable: true,
 			});
 		} finally {
-			// Every selection change bumps the version and clears loading itself, so a tab switch must not leave it stuck.
 			if (currentInstanceId.current === processInstanceId && drillDownVersion.current === version) {
 				setPendingDrillDownElementId(null);
 			}
@@ -307,7 +308,7 @@ const InstanceDiagram: React.FC = () => {
 						onRootChange={(rootElementId, getSelectionRootId) => {
 							clearSelection((elementId) => elementId !== undefined && rootElementId !== getSelectionRootId(elementId));
 						}}
-						overlaysData={overlaysData}
+						overlaysData={anchoredOverlaysData}
 						highlightedSequenceFlows={highlightedSequenceFlows}
 						highlightedElementIds={highlightedElementIds}
 						customElementClasses={customElementClasses}

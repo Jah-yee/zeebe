@@ -54,9 +54,25 @@ test('should have no accessibility violations in the process instance diagram sh
 
 	await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
 	await expect(operatePreviewProcessInstancePage.header).toBeVisible();
-	await expect(
-		operatePreviewProcessInstancePage.diagramPanel.getByTestId('instance-state-task-1-active'),
-	).toBeVisible();
+	await expect(operatePreviewProcessInstancePage.stateOverlay('Review invoice, Active: 1')).toBeVisible();
+
+	const results = await makeAxeBuilder().analyze();
+	expect(results.violations).toEqual([]);
+});
+
+test('should have no accessibility violations in the process instance diagram with a selected element', async ({
+	network,
+	page,
+	operatePreviewProcessInstancePage,
+	makeAxeBuilder,
+}) => {
+	network.use(
+		...processInstanceDiagramHandlers(),
+		...processInstanceHeaderHandlers(createProcessInstance({processInstanceKey: PROCESS_INSTANCE_ID})),
+	);
+
+	await page.goto(`/operate-preview/processes/${PROCESS_INSTANCE_ID}/variables?elementId=task-1`);
+	await expect(operatePreviewProcessInstancePage.stateOverlay('Review invoice, Incidents: 1')).toBeVisible();
 
 	const results = await makeAxeBuilder().analyze();
 	expect(results.violations).toEqual([]);
