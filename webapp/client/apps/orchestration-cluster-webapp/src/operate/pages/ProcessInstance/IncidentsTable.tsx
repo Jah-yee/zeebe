@@ -23,7 +23,6 @@ import {
 	TableRow,
 	Tooltip,
 } from '@carbon/react';
-import type {Incident} from '@camunda/camunda-api-zod-schemas/8.11';
 import {ColumnHeader} from '#/operate/shared/SortableTable/ColumnHeader';
 import {InfiniteScroller} from '#/operate/shared/InfiniteScroller/InfiniteScroller';
 import {EmptyMessage} from '#/operate/shared/EmptyMessage/EmptyMessage';
@@ -31,6 +30,7 @@ import {ErrorMessage} from '#/operate/shared/ErrorMessage/ErrorMessage';
 import {RichTextEditorModal} from '#/operate/shared/Editors/RichTextEditorModal';
 import {formatTimestamp} from '#/operate/shared/utils/formatTimestamp';
 import {IncidentOperation} from './IncidentOperation';
+import type {ChildInstanceWithIncident, DecisionInstanceLookup, EnhancedIncident} from './incidents.types';
 import {
 	ChildIncidentContainer,
 	DataTableSkeleton,
@@ -53,20 +53,6 @@ const InstanceLink = createLink(Link);
 // large single-line messages where its dedicated viewer adds value over the inline content.
 const MODAL_WORTHY_ERROR_MESSAGE_LENGTH = 200;
 const SKELETON_ROW_COUNT = 10;
-
-type EnhancedIncident = Incident & {
-	processDefinitionName: string;
-	elementName: string;
-	isSelected: boolean;
-};
-
-type DecisionInstanceLookup = Record<string, {decisionInstanceKey: string; decisionDefinitionName: string}>;
-
-type ChildInstanceWithIncident = {
-	type: 'process' | 'decision';
-	key: string;
-	name: string;
-};
 
 type Props = {
 	state: 'skeleton' | 'error' | 'empty' | 'content';
@@ -364,4 +350,3 @@ const IncidentsTable: React.FC<Props> = ({
 };
 
 export {IncidentsTable};
-export type {DecisionInstanceLookup, ChildInstanceWithIncident};
