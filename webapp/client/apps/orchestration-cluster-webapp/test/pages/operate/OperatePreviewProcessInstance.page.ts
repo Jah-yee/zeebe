@@ -35,7 +35,7 @@ class OperatePreviewProcessInstancePage extends BasePage {
 	}
 
 	get diagram() {
-		return this.diagramPanel.getByRole('region', {name: 'Diagram'});
+		return this.diagramPanel.getByRole('region', {name: 'Diagram', exact: true});
 	}
 
 	stateOverlay(name: string) {
