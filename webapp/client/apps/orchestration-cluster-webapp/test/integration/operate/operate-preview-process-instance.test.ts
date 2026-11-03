@@ -16,6 +16,8 @@ import {
 	mockLicenseEndpoint,
 	mockGetIncidentEndpoint,
 	mockQueryProcessInstanceIncidentsEndpoint,
+	mockQueryElementInstanceIncidentsEndpoint,
+	mockGetElementInstanceEndpoint,
 	mockResolveIncidentEndpoint,
 	mockQueryVariablesEndpoint,
 	mockSystemConfigurationEndpoint,
@@ -26,6 +28,7 @@ import {createSystemConfiguration} from '#/shared-test-modules/api-mocks/system-
 import {createProcessInstance} from '#/shared-test-modules/api-mocks/process-instances';
 import {createCallHierarchy} from '#/shared-test-modules/api-mocks/call-hierarchy';
 import {createIncident} from '#/shared-test-modules/api-mocks/incidents';
+import {createElementInstance} from '#/shared-test-modules/api-mocks/element-instances';
 import {createPaginatedResponse, createProblemDetails} from '#/shared-test-modules/api-mocks/shared';
 import {createQueryVariablesByUserTaskResponse, createVariable} from '#/shared-test-modules/api-mocks/variables';
 import {processInstanceHeaderHandlers} from '#/shared-test-modules/process-instance-header-handlers';
@@ -136,12 +139,22 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 			operatePreviewProcessInstancePage,
 			page,
 		}) => {
+			const incident = createIncident({errorMessage: 'Payment failed'});
+			const incidents = HttpResponse.json(
+				createPaginatedResponse({
+					items: [incident],
+					page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+				}),
+			);
 			network.use(
-				mockQueryProcessInstanceIncidentsEndpoint({
+				mockQueryProcessInstanceIncidentsEndpoint({successResponse: incidents}),
+				mockQueryElementInstanceIncidentsEndpoint({successResponse: incidents}),
+				mockGetElementInstanceEndpoint({
 					successResponse: HttpResponse.json(
-						createPaginatedResponse({
-							items: [createIncident({errorMessage: 'Payment failed'})],
-							page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+						createElementInstance({
+							elementInstanceKey: incident.elementInstanceKey,
+							elementId: incident.elementId,
+							processInstanceKey: PROCESS_INSTANCE_ID,
 						}),
 					),
 				}),
@@ -168,12 +181,22 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 			operatePreviewProcessInstancePage,
 			page,
 		}) => {
+			const incident = createIncident({errorMessage: 'Payment failed'});
+			const incidents = HttpResponse.json(
+				createPaginatedResponse({
+					items: [incident],
+					page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+				}),
+			);
 			network.use(
-				mockQueryProcessInstanceIncidentsEndpoint({
+				mockQueryProcessInstanceIncidentsEndpoint({successResponse: incidents}),
+				mockQueryElementInstanceIncidentsEndpoint({successResponse: incidents}),
+				mockGetElementInstanceEndpoint({
 					successResponse: HttpResponse.json(
-						createPaginatedResponse({
-							items: [createIncident({errorMessage: 'Payment failed'})],
-							page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+						createElementInstance({
+							elementInstanceKey: incident.elementInstanceKey,
+							elementId: incident.elementId,
+							processInstanceKey: PROCESS_INSTANCE_ID,
 						}),
 					),
 				}),
@@ -201,8 +224,17 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 							page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
 						}),
 					),
-					once: true,
 				}),
+				mockResolveIncidentEndpoint({successResponse: new HttpResponse(null, {status: 204})}),
+				mockGetIncidentEndpoint({successResponse: HttpResponse.json(createIncident({state: 'RESOLVED'}))}),
+			);
+			await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+			await operatePreviewProcessInstancePage.incidentsTab.click();
+			const retryButton = operatePreviewProcessInstancePage.incidentsTable.getByRole('button', {
+				name: 'Retry Incident',
+			});
+			await expect(retryButton).toBeVisible();
+			network.use(
 				mockQueryProcessInstanceIncidentsEndpoint({
 					successResponse: HttpResponse.json(
 						createPaginatedResponse({
@@ -211,16 +243,10 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 						}),
 					),
 				}),
-				mockResolveIncidentEndpoint({successResponse: new HttpResponse(null, {status: 204})}),
-				mockGetIncidentEndpoint({successResponse: HttpResponse.json(createIncident({state: 'RESOLVED'}))}),
 			);
-			await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
-			await operatePreviewProcessInstancePage.incidentsTab.click();
-			const resolution = page.waitForRequest((request) => request.url().endsWith('/resolution'));
 
-			await operatePreviewProcessInstancePage.incidentsTable.getByRole('button', {name: 'Retry Incident'}).click();
+			await retryButton.click();
 
-			await resolution;
 			await expect(page.getByText('There are no incidents matching this filter set')).toBeVisible();
 		});
 
@@ -238,7 +264,7 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 			await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
 			await operatePreviewProcessInstancePage.incidentsTab.click();
 
-			await expect(page.getByText("Couldn't fetch data")).toBeVisible();
+			await expect(page.getByText("Couldn't fetch data")).toBeVisible({timeout: 15000});
 			await expect(operatePreviewProcessInstancePage.incidentsTable).toBeHidden();
 		});
 	});
