@@ -1460,7 +1460,7 @@ public final class SearchQueryResponseMapper {
         .displayName(camundaUser.displayName())
         .email(camundaUser.email())
         .username(camundaUser.username())
-        .anonymous(false)
+        .isAnonymous(false)
         .build();
   }
 
@@ -1481,7 +1481,7 @@ public final class SearchQueryResponseMapper {
         .displayName(null)
         .email(null)
         .username(null)
-        .anonymous(true)
+        .isAnonymous(true)
         .build();
   }
 
