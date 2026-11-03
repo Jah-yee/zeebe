@@ -57,9 +57,7 @@ const PreviewPdf: React.FC<Props> = ({src, fileName}) => {
 	}
 
 	if (state.status === 'loading') {
-		return (
-			<Spinner data-testid="pdf-document-preview-spinner" label={t('operate.shared.documents.preparingPdfPreview')} />
-		);
+		return <Spinner label={t('operate.shared.documents.preparingPdfPreview')} />;
 	}
 
 	return <iframe src={state.url} title={fileName} className="block h-[80vh] w-full border-0" />;

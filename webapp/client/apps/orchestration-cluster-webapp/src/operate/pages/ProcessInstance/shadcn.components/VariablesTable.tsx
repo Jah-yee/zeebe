@@ -18,6 +18,7 @@ import {PreviewDocumentButton} from '#/operate/shared/Documents/shadcn.component
 import {DownloadDocumentButton} from '#/operate/shared/Documents/shadcn.components/DownloadDocumentButton';
 import {InlineJsonEditor} from '#/operate/shared/Editors/shadcn.components/InlineJsonEditor';
 import {StructuredList, StructuredRows} from '#/operate/shared/StructuredList/shadcn.components/StructuredList';
+import {isRedactedVariable} from '#/shared/variables/redactedVariable';
 import {useDebouncedValue} from '#/shared/hooks/useDebouncedValue';
 import {useProcessInstancePage} from '../useProcessInstancePage';
 import {useProcessInstanceModification} from '../useProcessInstanceModification';
@@ -70,10 +71,14 @@ const VariablesTable: React.FC<{scopeKey: string}> = ({scopeKey}) => {
 	const pages = useMemo(
 		() =>
 			(data?.pages ?? []).map((page) =>
-				page.items.map((variable) => ({
-					...variable,
-					documentResult: parseDocumentVariable(variable.value, variable.isTruncated),
-				})),
+				page.items.map((variable) => {
+					const isRedacted = isRedactedVariable(variable);
+					return {
+						...variable,
+						isRedacted,
+						documentResult: isRedacted ? null : parseDocumentVariable(variable.value, variable.isTruncated),
+					};
+				}),
 			),
 		[data],
 	);
@@ -151,7 +156,6 @@ const VariablesTable: React.FC<{scopeKey: string}> = ({scopeKey}) => {
 				) : (
 					<StructuredList
 						className="px-4 pb-4 [&_table]:table-fixed"
-						dataTestId="variables-list"
 						label={t('operate.processInstance.variables.list')}
 						headerSize="sm"
 						verticalCellPadding={VERTICAL_CELL_PADDING}
@@ -176,7 +180,6 @@ const VariablesTable: React.FC<{scopeKey: string}> = ({scopeKey}) => {
 											verticalCellPadding={VERTICAL_CELL_PADDING}
 											rows={fields.map((fieldPrefix, index) => ({
 												key: (fields.value[index] as NewVariableFormValues | undefined)?.id ?? fieldPrefix,
-												dataTestId: `variable-${fieldPrefix}`,
 												columns: [
 													{
 														cellContent: <NewVariableName fieldPrefix={fieldPrefix} scopeKey={scopeKey} />,
@@ -202,9 +205,8 @@ const VariablesTable: React.FC<{scopeKey: string}> = ({scopeKey}) => {
 								</FieldArray>
 							) : undefined
 						}
-						rows={variables.map(({name, value, variableKey, isTruncated, documentResult}) => ({
+						rows={variables.map(({name, value, variableKey, isTruncated, isRedacted, documentResult}) => ({
 							key: name,
-							dataTestId: `variable-${name}`,
 							columns: [
 								{
 									cellContent: (
@@ -215,7 +217,11 @@ const VariablesTable: React.FC<{scopeKey: string}> = ({scopeKey}) => {
 									width: '35%',
 								},
 								{
-									cellContent: isEditMode(name) ? (
+									cellContent: isRedacted ? (
+										<div className="py-1 font-mono text-[13px]/5 text-muted-foreground">
+											{t('globalRedactedValueLabel')}
+										</div>
+									) : isEditMode(name) ? (
 										<ExistingVariableValue
 											variableKey={variableKey}
 											variableName={name}
@@ -252,7 +258,9 @@ const VariablesTable: React.FC<{scopeKey: string}> = ({scopeKey}) => {
 									width: 'auto',
 								},
 								{
-									cellContent: (
+									cellContent: isRedacted ? (
+										<div className={OPERATIONS_CLASS} />
+									) : (
 										<div className={OPERATIONS_CLASS}>
 											{isEditMode(name) ? (
 												<EditVariableModalButton

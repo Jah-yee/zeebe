@@ -68,7 +68,6 @@ const NewVariableName: React.FC<Props> = ({fieldPrefix, scopeKey}) => {
 					<TextInputField
 						{...input}
 						ref={inputRef}
-						data-testid="new-variable-name"
 						type="text"
 						placeholder={t('operate.processInstance.variables.name')}
 						id={fieldName}

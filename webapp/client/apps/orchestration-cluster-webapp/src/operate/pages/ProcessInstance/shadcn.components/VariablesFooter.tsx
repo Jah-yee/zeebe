@@ -31,10 +31,7 @@ const VariablesFooter: React.FC<Props> = ({scopeKey, isViewMode}) => {
 	const isDisabled = !canEditVariables || !isViewMode || (hasSelection && resolvedElementInstance?.state !== 'ACTIVE');
 
 	return (
-		<div
-			data-testid="variables-footer"
-			className="mt-auto flex flex-wrap items-center justify-between border-t border-border p-2"
-		>
+		<div className="mt-auto flex flex-wrap items-center justify-between border-t border-border p-2">
 			{isAddingVariable ? (
 				<NewVariable scopeKey={scopeKey} />
 			) : (

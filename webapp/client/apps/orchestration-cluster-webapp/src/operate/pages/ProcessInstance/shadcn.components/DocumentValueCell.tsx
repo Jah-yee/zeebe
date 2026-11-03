@@ -21,7 +21,7 @@ const DocumentValueCell: React.FC<{result: DocumentParseResult}> = ({result}) =>
 	if (result.type === 'single') {
 		const {fileName, size, isExpired} = result.document;
 		return (
-			<div data-testid="document-value-cell" className={containerClassName}>
+			<div className={containerClassName}>
 				{icon}
 				<span title={fileName} className="min-w-0 overflow-hidden text-sm text-ellipsis whitespace-nowrap">
 					{middleTruncate(fileName)}
@@ -35,7 +35,7 @@ const DocumentValueCell: React.FC<{result: DocumentParseResult}> = ({result}) =>
 	const count = result.documents.length;
 
 	return (
-		<div data-testid="document-value-cell" className={containerClassName}>
+		<div className={containerClassName}>
 			{icon}
 			<span className="text-sm text-neutral-foreground-subtle">
 				{t(count !== 1 ? 'operate.shared.documents.countMultiple' : 'operate.shared.documents.countSingle', {

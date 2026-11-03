@@ -47,7 +47,11 @@ class OperatePreviewProcessInstancePage extends BasePage {
 	}
 
 	get variablesList() {
-		return this.page.getByTestId('variables-list');
+		return this.page.getByRole('table', {name: 'Variable List'});
+	}
+
+	variableRow(name: string) {
+		return this.variablesList.getByRole('row', {name: new RegExp(`^${name}(?![\\w-])`)});
 	}
 
 	get incidentsTab() {

@@ -30,9 +30,7 @@ const PreviewJson: React.FC<Props> = ({src, fileName}) => {
 			return beautifyJSON(await response.text());
 		},
 	});
-	const loading = (
-		<Spinner data-testid="json-document-preview-spinner" label={t('operate.shared.documents.preparingJsonPreview')} />
-	);
+	const loading = <Spinner label={t('operate.shared.documents.preparingJsonPreview')} />;
 
 	return (
 		<div className="min-h-[80vh]">

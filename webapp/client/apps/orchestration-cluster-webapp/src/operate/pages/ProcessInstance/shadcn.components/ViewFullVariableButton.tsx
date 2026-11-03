@@ -10,8 +10,9 @@ import {useRef, useState} from 'react';
 import {useForm} from 'react-final-form';
 import {useQueryClient} from '@tanstack/react-query';
 import {useTranslation} from 'react-i18next';
-import {Button, Spinner} from '@camunda/design-system';
+import {Button, SpinnerIcon} from '@camunda/design-system';
 import {RichTextEditorModal} from '#/operate/shared/Editors/shadcn.components/RichTextEditorModal';
+import {isRedactedVariable} from '#/shared/variables/redactedVariable';
 import {notificationsStore} from '#/shared/notifications/notifications.store';
 import {variableQuery} from '../variables.queries';
 import {MaximizeButton} from './MaximizeButton';
@@ -38,7 +39,8 @@ const ViewFullVariableButton: React.FC<Props> = ({variableKey, variableName, but
 		}
 		setIsLoading(true);
 		try {
-			setFullValue((await queryClient.fetchQuery(variableQuery(variableKey))).value);
+			const variable = await queryClient.fetchQuery(variableQuery(variableKey));
+			setFullValue(isRedactedVariable(variable) ? JSON.stringify(t('globalRedactedValueLabel')) : variable.value);
 		} catch {
 			notificationsStore.displayNotification({
 				kind: 'error',
@@ -52,12 +54,7 @@ const ViewFullVariableButton: React.FC<Props> = ({variableKey, variableName, but
 
 	return (
 		<>
-			{isLoading && (
-				<Spinner
-					data-testid="variable-operation-spinner"
-					accessibleLabel={t('operate.processInstance.variables.open')}
-				/>
-			)}
+			{isLoading && <SpinnerIcon />}
 			{buttonLabel === undefined ? (
 				<MaximizeButton ref={triggerRef} isBusy={isLoading} onClick={open} />
 			) : (

@@ -37,7 +37,7 @@ const VariableEditButtons: React.FC<{isSaveBlocked?: boolean}> = ({isSaveBlocked
 			/>
 			{submitting ? (
 				<span className="inline-flex size-8 shrink-0 items-center justify-center">
-					<Spinner data-testid="full-variable-loader" accessibleLabel={t('operate.processInstance.variables.save')} />
+					<Spinner accessibleLabel={t('operate.processInstance.variables.saving')} />
 				</span>
 			) : (
 				<IconButton

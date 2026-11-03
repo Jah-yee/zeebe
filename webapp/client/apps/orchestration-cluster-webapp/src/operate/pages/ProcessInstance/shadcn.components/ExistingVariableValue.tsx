@@ -57,12 +57,7 @@ const ExistingVariableValue: React.FC<Props> = ({variableKey, variableName, vari
 			>
 				{({input, meta}) => (
 					<>
-						{isLoading && (
-							<Spinner
-								data-testid="full-variable-loader"
-								accessibleLabel={t('operate.processInstance.variables.value')}
-							/>
-						)}
+						{isLoading && <Spinner accessibleLabel={t('operate.processInstance.variables.loadingValue')} />}
 						<InlineJsonEditor
 							value={input.value}
 							onChange={input.onChange}

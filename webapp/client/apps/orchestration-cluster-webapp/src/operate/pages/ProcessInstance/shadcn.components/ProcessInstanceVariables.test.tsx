@@ -11,6 +11,7 @@ import {afterEach, describe, expect, onTestFinished, vi} from 'vitest';
 import {userEvent} from 'vitest/browser';
 import {cleanup} from 'vitest-browser-react';
 import {HttpResponse} from 'msw';
+import type {SetupWorker} from 'msw/browser';
 import {z} from 'zod';
 import {useRouterState} from '@tanstack/react-router';
 import type {DocumentReference, Variable} from '@camunda/camunda-api-zod-schemas/8.11';
@@ -30,6 +31,7 @@ import {
 	createQueryElementInstancesResponse,
 } from '#/shared-test-modules/api-mocks/element-instances';
 import {createQueryVariablesByUserTaskResponse, createVariable} from '#/shared-test-modules/api-mocks/variables';
+import {variableRow} from '#/shared-test-modules/variable-row';
 import {createPaginatedResponse, createProblemDetails} from '#/shared-test-modules/api-mocks/shared';
 import {createDocumentReference} from '#/shared-test-modules/api-mocks/documents';
 import {notificationsStore} from '#/shared/notifications/notifications.store';
@@ -82,38 +84,19 @@ function renderVariables(search = '', {isModificationModeEnabled: initialModific
 }
 
 describe('<ProcessInstanceVariables />', () => {
-	it.for([
-		{description: '49 complete variables', count: 49, totalItems: 49, hasMoreTotalItems: false, canCopy: true},
-		{description: '50 complete variables', count: 50, totalItems: 50, hasMoreTotalItems: false, canCopy: true},
-		{
-			description: 'a 51st variable beyond the first page',
-			count: 50,
-			totalItems: 51,
-			hasMoreTotalItems: false,
-			canCopy: false,
-		},
-		{description: 'a capped total of 50 variables', count: 50, totalItems: 50, hasMoreTotalItems: true, canCopy: false},
-		{
-			description: 'an incomplete total without a next cursor',
-			count: 50,
-			totalItems: 51,
-			hasMoreTotalItems: false,
-			endCursor: null,
-			canCopy: false,
-		},
-		{
-			description: 'a capped total without a next cursor',
-			count: 50,
-			totalItems: 50,
-			hasMoreTotalItems: true,
-			endCursor: null,
-			canCopy: false,
-		},
-	])(
-		'should preserve safe aggregate copying for $description',
-		async ({count, totalItems, hasMoreTotalItems, endCursor = 'last-item-cursor', canCopy}, {worker}) => {
-			const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
-			onTestFinished(() => writeText.mockRestore());
+	describe('aggregate copying', () => {
+		type PageScenario = {
+			description: string;
+			count: number;
+			totalItems: number;
+			hasMoreTotalItems: boolean;
+			endCursor?: string | null;
+		};
+
+		async function renderVariablePages(
+			worker: SetupWorker,
+			{count, totalItems, hasMoreTotalItems, endCursor = 'last-item-cursor'}: PageScenario,
+		) {
 			const items = Array.from({length: count}, (_, index) =>
 				createVariable({
 					name: `value_${String(index).padStart(2, '0')}`,
@@ -127,22 +110,52 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			await expect.element(screen.getByTestId(`variable-${items.at(-1)!.name}`)).toBeVisible();
-			const copy = screen.getByRole('button', {name: 'Copy variables'});
+			await expect.element(variableRow(screen, items.at(-1)!.name)).toBeVisible();
 
-			if (!canCopy) {
-				await expect.element(copy).toBeDisabled();
-				expect(writeText).not.toHaveBeenCalled();
-				return;
-			}
+			return {items, copy: screen.getByRole('button', {name: 'Copy variables'})};
+		}
+
+		it.for<PageScenario>([
+			{description: '49 complete variables', count: 49, totalItems: 49, hasMoreTotalItems: false},
+			{description: '50 complete variables', count: 50, totalItems: 50, hasMoreTotalItems: false},
+		])('should copy all variables for $description', async (scenario, {worker}) => {
+			const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+			onTestFinished(() => writeText.mockRestore());
+			const {items, copy} = await renderVariablePages(worker, scenario);
 
 			await expect.element(copy).toBeEnabled();
 			await userEvent.click(copy);
 
 			const expected = JSON.stringify(Object.fromEntries(items.map(({name, value}) => [name, JSON.parse(value)])));
 			await expect.poll(() => writeText.mock.calls).toEqual([[expected]]);
-		},
-	);
+		});
+
+		it.for<PageScenario>([
+			{description: 'a 51st variable beyond the first page', count: 50, totalItems: 51, hasMoreTotalItems: false},
+			{description: 'a capped total of 50 variables', count: 50, totalItems: 50, hasMoreTotalItems: true},
+			{
+				description: 'an incomplete total without a next cursor',
+				count: 50,
+				totalItems: 51,
+				hasMoreTotalItems: false,
+				endCursor: null,
+			},
+			{
+				description: 'a capped total without a next cursor',
+				count: 50,
+				totalItems: 50,
+				hasMoreTotalItems: true,
+				endCursor: null,
+			},
+		])('should disable copying for $description', async (scenario, {worker}) => {
+			const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+			onTestFinished(() => writeText.mockRestore());
+			const {copy} = await renderVariablePages(worker, scenario);
+
+			await expect.element(copy).toBeDisabled();
+			expect(writeText).not.toHaveBeenCalled();
+		});
+	});
 
 	it('should show the process instance variables sorted by name', async ({worker}) => {
 		worker.use(
@@ -165,6 +178,82 @@ describe('<ProcessInstanceVariables />', () => {
 
 		await expect.element(screen.getByRole('button', {name: 'Copy amount'})).toHaveTextContent('100');
 		await expect.element(screen.getByRole('button', {name: 'Copy customer'})).toHaveTextContent('{ "name": "Jane" }');
+	});
+
+	it('should show [REDACTED] instead of the value of a redacted variable', async ({worker}) => {
+		worker.use(
+			mockQueryVariablesEndpoint({
+				successResponse: variablesResponse([
+					createVariable({name: 'amount', value: '100', variableKey: '1'}),
+					createVariable({
+						name: 'password',
+						value: 'irrelevant',
+						variableKey: '2',
+						metadata: {protectionModes: ['REDACT']},
+					}),
+				]),
+			}),
+		);
+		const screen = await renderVariables();
+
+		await expect.element(screen.getByRole('button', {name: 'Copy amount'})).toHaveTextContent('100');
+		await expect.element(screen.getByText('[REDACTED]')).toBeVisible();
+		await expect.element(variableRow(screen, 'password')).not.toHaveTextContent('irrelevant');
+		await expect.element(screen.getByRole('button', {name: 'Copy password'})).not.toBeInTheDocument();
+		await expect.element(screen.getByRole('button', {name: 'Edit variable password'})).not.toBeInTheDocument();
+	});
+
+	it('should copy the [REDACTED] label as a string alongside parsed unprotected values', async ({worker}) => {
+		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+		onTestFinished(() => writeText.mockRestore());
+		worker.use(
+			mockQueryVariablesEndpoint({
+				successResponse: variablesResponse([
+					createVariable({name: 'amount', value: '100', variableKey: '1'}),
+					createVariable({name: 'customer', value: '{"name":"Jane"}', variableKey: '2'}),
+					createVariable({
+						name: 'password',
+						value: 'irrelevant',
+						variableKey: '3',
+						metadata: {protectionModes: ['REDACT']},
+					}),
+				]),
+			}),
+		);
+		const screen = await renderVariables();
+		const copy = screen.getByRole('button', {name: 'Copy variables'});
+
+		await expect.element(copy).toBeEnabled();
+		await userEvent.click(copy);
+
+		await expect
+			.poll(() => writeText.mock.calls)
+			.toEqual([[JSON.stringify({amount: 100, customer: {name: 'Jane'}, password: '[REDACTED]'})]]);
+	});
+
+	it('should keep copying enabled when a redacted variable is reported as truncated', async ({worker}) => {
+		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+		onTestFinished(() => writeText.mockRestore());
+		worker.use(
+			mockQueryVariablesEndpoint({
+				successResponse: variablesResponse([
+					createVariable({
+						name: 'password',
+						value: '"irrel',
+						isTruncated: true,
+						variableKey: '1',
+						metadata: {protectionModes: ['REDACT']},
+					}),
+				]),
+			}),
+		);
+		const screen = await renderVariables();
+		const copy = screen.getByRole('button', {name: 'Copy variables'});
+
+		await expect.element(copy).toBeEnabled();
+		await userEvent.click(copy);
+
+		await expect.poll(() => writeText.mock.calls).toEqual([[JSON.stringify({password: '[REDACTED]'})]]);
 	});
 
 	it('should show an empty message when the scope has no variables', async ({worker}) => {
@@ -261,13 +350,13 @@ describe('<ProcessInstanceVariables />', () => {
 			`?elementId=user-task&elementInstanceKey=${elementInstance.elementInstanceKey}`,
 		);
 
-		await expect.element(screen.getByTestId('variable-local')).toBeVisible();
+		await expect.element(variableRow(screen, 'local')).toBeVisible();
 	});
 
 	it('should search variables by name', async ({worker}) => {
 		worker.use(mockQueryVariablesEndpoint({successResponse: variablesResponse([createVariable({name: 'amount'})])}));
 		const screen = await renderVariables();
-		await expect.element(screen.getByTestId('variable-amount')).toBeVisible();
+		await expect.element(variableRow(screen, 'amount')).toBeVisible();
 
 		worker.use(
 			mockQueryVariablesEndpoint({
@@ -286,7 +375,7 @@ describe('<ProcessInstanceVariables />', () => {
 	it('should show an error when searching variables fails', async ({worker}) => {
 		worker.use(mockQueryVariablesEndpoint({successResponse: variablesResponse([createVariable({name: 'amount'})])}));
 		const screen = await renderVariables();
-		await expect.element(screen.getByTestId('variable-amount')).toBeVisible();
+		await expect.element(variableRow(screen, 'amount')).toBeVisible();
 
 		worker.use(
 			mockQueryVariablesEndpoint({
@@ -397,8 +486,9 @@ describe('<ProcessInstanceVariables />', () => {
 			);
 			const screen = await renderVariables();
 
-			const row = screen.getByTestId('variable-invoice');
-			await expect.element(row.getByTestId('document-value-cell')).toHaveTextContent('invoice.pdf1.5 KiB');
+			const row = variableRow(screen, 'invoice');
+			await expect.element(row.getByText('invoice.pdf')).toBeVisible();
+			await expect.element(row.getByText('1.5 KiB')).toBeVisible();
 			await expect.element(row.getByRole('button', {name: /^Preview document for /})).toBeEnabled();
 			await expect
 				.element(row.getByRole('link', {name: /^Download document for /}))
@@ -424,7 +514,7 @@ describe('<ProcessInstanceVariables />', () => {
 			);
 			const screen = await renderVariables();
 
-			const row = screen.getByTestId('variable-invoice');
+			const row = variableRow(screen, 'invoice');
 			await expect.element(row.getByText('Expired')).toBeVisible();
 			await expect.element(row.getByRole('button', {name: /^Preview document for /})).toBeDisabled();
 			await expect.element(row.getByRole('button', {name: /^Download document for /})).toBeDisabled();
@@ -438,8 +528,8 @@ describe('<ProcessInstanceVariables />', () => {
 			);
 			const screen = await renderVariables();
 
-			const row = screen.getByTestId('variable-files');
-			await expect.element(row.getByTestId('document-value-cell')).toHaveTextContent('3 documents');
+			const row = variableRow(screen, 'files');
+			await expect.element(row.getByText('3 documents', {exact: true})).toBeVisible();
 			await expect.element(row.getByRole('button', {name: /^Preview document for /})).not.toBeInTheDocument();
 			await expect.element(row.getByRole('link', {name: /^Download document for /})).not.toBeInTheDocument();
 
@@ -466,8 +556,8 @@ describe('<ProcessInstanceVariables />', () => {
 			);
 			const screen = await renderVariables();
 
-			const row = screen.getByTestId('variable-files');
-			await expect.element(row.getByTestId('document-value-cell')).toHaveTextContent('2+ documents');
+			const row = variableRow(screen, 'files');
+			await expect.element(row.getByText('2+ documents', {exact: true})).toBeVisible();
 
 			await userEvent.click(row.getByRole('button', {name: /^View documents for variable /}));
 
@@ -488,9 +578,7 @@ describe('<ProcessInstanceVariables />', () => {
 			);
 			const screen = await renderVariables();
 
-			await userEvent.click(
-				screen.getByTestId('variable-files').getByRole('button', {name: /^View documents for variable /}),
-			);
+			await userEvent.click(variableRow(screen, 'files').getByRole('button', {name: /^View documents for variable /}));
 
 			const dialog = screen.getByRole('dialog', {name: '2+ documents in files'});
 			await expect
@@ -505,9 +593,8 @@ describe('<ProcessInstanceVariables />', () => {
 			worker.use(mockQueryVariablesEndpoint({successResponse: variablesResponse(decoyVariables)}));
 			const screen = await renderVariables();
 
-			const row = screen.getByTestId('variable-nestedDecoy');
+			const row = variableRow(screen, 'nestedDecoy');
 			await expect.element(row.getByRole('button', {name: 'Copy nestedDecoy'})).toBeVisible();
-			await expect.element(row.getByTestId('document-value-cell')).not.toBeInTheDocument();
 			await expect.element(row.getByRole('button', {name: /^Preview document for /})).not.toBeInTheDocument();
 			await expect.element(row.getByRole('button', {name: /^View documents for variable /})).not.toBeInTheDocument();
 		});
@@ -527,21 +614,21 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			await expect.element(screen.getByTestId('variable-amount')).toBeVisible();
+			await expect.element(variableRow(screen, 'amount')).toBeVisible();
 			await expect.element(screen.getByRole('radio', {name: 'All'})).toBeChecked();
 
 			await userEvent.click(screen.getByRole('radio', {name: 'Documents'}));
 
 			await expect.element(screen.getByRole('radio', {name: 'Documents'})).toBeChecked();
-			await expect.element(screen.getByTestId('variable-amount')).not.toBeInTheDocument();
-			await expect.element(screen.getByTestId('variable-invoice')).toBeVisible();
-			await expect.element(screen.getByTestId('variable-nestedDecoy')).not.toBeInTheDocument();
-			await expect.element(screen.getByTestId('variable-stringDecoy')).not.toBeInTheDocument();
+			await expect.element(variableRow(screen, 'amount')).not.toBeInTheDocument();
+			await expect.element(variableRow(screen, 'invoice')).toBeVisible();
+			await expect.element(variableRow(screen, 'nestedDecoy')).not.toBeInTheDocument();
+			await expect.element(variableRow(screen, 'stringDecoy')).not.toBeInTheDocument();
 
 			await userEvent.click(screen.getByRole('radio', {name: 'All'}));
 
-			await expect.element(screen.getByTestId('variable-amount')).toBeVisible();
-			await expect.element(screen.getByTestId('variable-invoice')).toBeVisible();
+			await expect.element(variableRow(screen, 'amount')).toBeVisible();
+			await expect.element(variableRow(screen, 'invoice')).toBeVisible();
 		});
 
 		it('should show an empty message when there are no document variables', async ({worker}) => {
@@ -553,12 +640,12 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			await expect.element(screen.getByTestId('variable-amount')).toBeVisible();
+			await expect.element(variableRow(screen, 'amount')).toBeVisible();
 
 			await userEvent.click(screen.getByRole('radio', {name: 'Documents'}));
 
 			await expect.element(screen.getByText('There are no document variables')).toBeVisible();
-			await expect.element(screen.getByTestId('variable-nestedDecoy')).not.toBeInTheDocument();
+			await expect.element(variableRow(screen, 'nestedDecoy')).not.toBeInTheDocument();
 		});
 
 		it('should hide the search and document filter in modification mode', async ({worker}) => {
@@ -568,7 +655,7 @@ describe('<ProcessInstanceVariables />', () => {
 			);
 			const screen = await renderVariables('', {isModificationModeEnabled: true});
 
-			await expect.element(screen.getByTestId('variable-amount')).toBeVisible();
+			await expect.element(variableRow(screen, 'amount')).toBeVisible();
 			await expect.element(screen.getByRole('group', {name: 'Variable filter'})).not.toBeInTheDocument();
 			await expect.element(screen.getByRole('searchbox')).not.toBeInTheDocument();
 		});
@@ -588,14 +675,14 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			await expect.element(screen.getByTestId('variable-amount')).toBeVisible();
+			await expect.element(variableRow(screen, 'amount')).toBeVisible();
 			await userEvent.click(screen.getByRole('radio', {name: 'Documents'}));
-			await expect.element(screen.getByTestId('variable-amount')).not.toBeInTheDocument();
+			await expect.element(variableRow(screen, 'amount')).not.toBeInTheDocument();
 
 			await userEvent.click(screen.getByRole('button', {name: 'Enter modification mode'}));
 
-			await expect.element(screen.getByTestId('variable-amount')).toBeVisible();
-			await expect.element(screen.getByTestId('variable-invoice')).toBeVisible();
+			await expect.element(variableRow(screen, 'amount')).toBeVisible();
+			await expect.element(variableRow(screen, 'invoice')).toBeVisible();
 			await expect.element(screen.getByRole('group', {name: 'Variable filter'})).not.toBeInTheDocument();
 		});
 
@@ -619,12 +706,12 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			await expect.element(screen.getByTestId('variable-decoy-00')).toBeVisible();
+			await expect.element(variableRow(screen, 'decoy-00')).toBeVisible();
 
 			await userEvent.click(screen.getByRole('radio', {name: 'Documents'}));
 
-			await expect.element(screen.getByTestId('variable-invoice')).toBeVisible();
-			await expect.element(screen.getByTestId('variable-decoy-00')).not.toBeInTheDocument();
+			await expect.element(variableRow(screen, 'invoice')).toBeVisible();
+			await expect.element(variableRow(screen, 'decoy-00')).not.toBeInTheDocument();
 			await expect.element(screen.getByText('There are no document variables')).not.toBeInTheDocument();
 		});
 
@@ -651,13 +738,13 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			await expect.element(screen.getByTestId('variable-decoy-00')).toBeVisible();
+			await expect.element(variableRow(screen, 'decoy-00')).toBeVisible();
 
 			await userEvent.click(screen.getByRole('radio', {name: 'Documents'}));
 
-			await expect.element(screen.getByTestId('variable-first')).toBeVisible();
-			await expect.element(screen.getByTestId('variable-second')).toBeVisible();
-			await expect.element(screen.getByTestId('variable-decoy-00')).not.toBeInTheDocument();
+			await expect.element(variableRow(screen, 'first')).toBeVisible();
+			await expect.element(variableRow(screen, 'second')).toBeVisible();
+			await expect.element(variableRow(screen, 'decoy-00')).not.toBeInTheDocument();
 		});
 
 		it('should show an error when loading more document candidates fails', async ({worker}) => {
@@ -678,7 +765,7 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			await expect.element(screen.getByTestId('variable-decoy-00')).toBeVisible();
+			await expect.element(variableRow(screen, 'decoy-00')).toBeVisible();
 
 			await userEvent.click(screen.getByRole('radio', {name: 'Documents'}));
 
@@ -698,7 +785,7 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			const row = screen.getByTestId('variable-files');
+			const row = variableRow(screen, 'files');
 			await userEvent.click(row.getByRole('button', {name: 'Open'}));
 			await expect
 				.poll(() => notificationsStore.notifications.map(({title}) => title))
@@ -733,7 +820,7 @@ describe('<ProcessInstanceVariables />', () => {
 				}),
 			);
 			const screen = await renderVariables();
-			const row = screen.getByTestId('variable-files');
+			const row = variableRow(screen, 'files');
 			await userEvent.click(row.getByRole('button', {name: 'Open'}));
 			const fullValue = screen.getByRole('dialog', {name: 'Full value of files'});
 			await expect.element(fullValue).toBeVisible();
@@ -763,15 +850,13 @@ describe('<ProcessInstanceVariables />', () => {
 			);
 			const screen = await renderVariables();
 
-			await userEvent.click(
-				screen.getByTestId('variable-invoice').getByRole('button', {name: /^Preview document for /}),
-			);
+			await userEvent.click(variableRow(screen, 'invoice').getByRole('button', {name: /^Preview document for /}));
 
 			const dialog = screen.getByRole('dialog', {name: 'Preview: invoice.pdf'});
 			await expect.element(dialog.getByTitle('invoice.pdf')).toBeVisible();
 			await userEvent.click(dialog.getByRole('button', {name: 'Close'}));
 			await expect.element(dialog).not.toBeInTheDocument();
-			await expect.element(screen.getByTestId('variable-invoice')).toBeVisible();
+			await expect.element(variableRow(screen, 'invoice')).toBeVisible();
 		});
 	});
 });

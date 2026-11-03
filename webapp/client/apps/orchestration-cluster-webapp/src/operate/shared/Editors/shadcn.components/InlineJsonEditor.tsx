@@ -94,7 +94,6 @@ const InlineJsonEditor = ({
 				<div
 					className={cn(
 						'relative border-b border-input focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-ring',
-						// Monaco's hidden textarea draws its own focus ring on top of the wrapper's
 						'[&_.monaco-editor_textarea:focus]:shadow-none!',
 						!!fieldError &&
 							'outline-2 -outline-offset-2 outline-danger-border-strong focus-within:outline-danger-border-strong',

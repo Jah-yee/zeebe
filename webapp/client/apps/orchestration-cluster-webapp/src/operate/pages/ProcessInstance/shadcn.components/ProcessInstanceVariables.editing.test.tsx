@@ -10,6 +10,7 @@ import {afterEach, describe, expect, beforeAll} from 'vitest';
 import {userEvent, type Locator} from 'vitest/browser';
 import {cleanup} from 'vitest-browser-react';
 import {HttpResponse} from 'msw';
+import type {SetupWorker} from 'msw/browser';
 import {z} from 'zod';
 import {useRouterState} from '@tanstack/react-router';
 import type {ProcessInstance, Variable} from '@camunda/camunda-api-zod-schemas/8.11';
@@ -25,6 +26,7 @@ import {
 import {createProcessInstance} from '#/shared-test-modules/api-mocks/process-instances';
 import {createElementInstance} from '#/shared-test-modules/api-mocks/element-instances';
 import {createQueryVariablesByUserTaskResponse, createVariable} from '#/shared-test-modules/api-mocks/variables';
+import {variableRow} from '#/shared-test-modules/variable-row';
 import {createProblemDetails} from '#/shared-test-modules/api-mocks/shared';
 import {notificationsStore} from '#/shared/notifications/notifications.store';
 import {ProcessInstancePageProvider} from '../ProcessInstancePageProvider';
@@ -143,9 +145,8 @@ function renderVariables({
 describe('<ProcessInstanceVariables /> editing', () => {
 	beforeAll(preloadMonaco, 120_000);
 
-	it.for(['editing', 'modification'] as const)(
-		'should stop failed variable-name pagination and recover after refreshing in %s mode',
-		async (mode, {worker}) => {
+	describe('after a failed variable-name pagination', () => {
+		function mockFailedNamePagination(worker: SetupWorker) {
 			let nextPageRequests = 0;
 			const firstPage = HttpResponse.json(
 				createQueryVariablesByUserTaskResponse({
@@ -167,61 +168,86 @@ describe('<ProcessInstanceVariables /> editing', () => {
 					failureResponse: firstPage,
 				}),
 			);
-			const screen = await renderVariables();
+
+			return {
+				getNextPageRequests: () => nextPageRequests,
+				recover: () =>
+					worker.use(
+						mockQueryVariablesEndpoint({
+							schema: nextPageSchema,
+							successResponse: variablesResponse([createVariable({name: 'foo'})]),
+							failureResponse: firstPage,
+						}),
+					),
+			};
+		}
+
+		async function failNamePagination(
+			screen: Awaited<ReturnType<typeof renderVariables>>,
+			getNextPageRequests: () => number,
+		) {
 			screen.queryClient.setQueryDefaults(
 				variablesQuery({processInstanceKey: PROCESS_INSTANCE_ID, scopeKey: PROCESS_INSTANCE_ID}).queryKey,
 				{retry: 2, retryDelay: 20},
 			);
-			if (mode === 'modification') {
-				await userEvent.click(screen.getByRole('button', {name: 'Plan token'}));
-			}
-
 			await userEvent.click(screen.getByRole('button', {name: 'Add Variable'}));
 
 			await expect.element(screen.getByText('Variables could not be fetched')).toBeVisible();
 			await expect.element(screen.getByText('Refresh the page to try again')).toBeVisible();
 			await expect.poll(() => screen.queryClient.isFetching()).toBe(0);
-			expect(nextPageRequests).toBe(3);
+			expect(getNextPageRequests()).toBe(3);
 			await expect.element(screen.getByRole('button', {name: 'Save'})).not.toBeInTheDocument();
 			await expect.element(screen.getByText('Add new variable "foo"')).not.toBeInTheDocument();
 			expect(notificationTitles()).toEqual([]);
+		}
 
-			await screen.unmount();
-			worker.use(
-				mockQueryVariablesEndpoint({
-					schema: nextPageSchema,
-					successResponse: variablesResponse([createVariable({name: 'foo'})]),
-					failureResponse: firstPage,
-				}),
-			);
-			const refreshedScreen = await renderVariables();
-			if (mode === 'modification') {
-				await userEvent.click(refreshedScreen.getByRole('button', {name: 'Plan token'}));
-			}
-			await userEvent.click(refreshedScreen.getByRole('button', {name: 'Add Variable'}));
-			await userEvent.fill(refreshedScreen.getByRole('textbox', {name: 'Name'}), 'foo');
-			await appendToNewValue(refreshedScreen.getByRole('group', {name: 'Value'}), '1');
+		async function addDuplicateVariable(screen: Awaited<ReturnType<typeof renderVariables>>) {
+			await userEvent.click(screen.getByRole('button', {name: 'Add Variable'}));
+			await userEvent.fill(screen.getByRole('textbox', {name: 'Name'}), 'foo');
+			await appendToNewValue(screen.getByRole('group', {name: 'Value'}), '1');
 			await userEvent.tab();
 
-			await expect.element(refreshedScreen.getByText('Name should be unique')).toBeVisible();
-			await expect.element(refreshedScreen.getByTestId('variable-foo')).toBeVisible();
-			await expect.element(refreshedScreen.getByText('Variables could not be fetched')).not.toBeInTheDocument();
-			if (mode === 'editing') {
-				await expect.element(refreshedScreen.getByRole('button', {name: 'Save'})).toBeDisabled();
-			} else {
-				await expect.element(refreshedScreen.getByText('Add new variable "foo"')).not.toBeInTheDocument();
-			}
+			await expect.element(screen.getByText('Name should be unique')).toBeVisible();
+			await expect.element(screen.getByText('Variables could not be fetched')).not.toBeInTheDocument();
+		}
+
+		it('should recover after refreshing in editing mode', async ({worker}) => {
+			const {getNextPageRequests, recover} = mockFailedNamePagination(worker);
+			const screen = await renderVariables();
+			await failNamePagination(screen, getNextPageRequests);
+
+			await screen.unmount();
+			recover();
+			const refreshedScreen = await renderVariables();
+			await addDuplicateVariable(refreshedScreen);
+			await expect.element(variableRow(refreshedScreen, 'foo').getByRole('button', {name: 'Open'})).toBeVisible();
+			await expect.element(refreshedScreen.getByRole('button', {name: 'Save'})).toBeDisabled();
 
 			await userEvent.fill(refreshedScreen.getByRole('textbox', {name: 'Name'}), 'bar');
 			await userEvent.tab();
 
-			if (mode === 'editing') {
-				await expect.element(refreshedScreen.getByRole('button', {name: 'Save'})).toBeEnabled();
-			} else {
-				await expect.element(refreshedScreen.getByText('Add new variable "bar"')).toBeVisible();
-			}
-		},
-	);
+			await expect.element(refreshedScreen.getByRole('button', {name: 'Save'})).toBeEnabled();
+		});
+
+		it('should recover after refreshing in modification mode', async ({worker}) => {
+			const {getNextPageRequests, recover} = mockFailedNamePagination(worker);
+			const screen = await renderVariables();
+			await userEvent.click(screen.getByRole('button', {name: 'Plan token'}));
+			await failNamePagination(screen, getNextPageRequests);
+
+			await screen.unmount();
+			recover();
+			const refreshedScreen = await renderVariables();
+			await userEvent.click(refreshedScreen.getByRole('button', {name: 'Plan token'}));
+			await addDuplicateVariable(refreshedScreen);
+			await expect.element(refreshedScreen.getByText('Add new variable "foo"')).not.toBeInTheDocument();
+
+			await userEvent.fill(refreshedScreen.getByRole('textbox', {name: 'Name'}), 'bar');
+			await userEvent.tab();
+
+			await expect.element(refreshedScreen.getByText('Add new variable "bar"')).toBeVisible();
+		});
+	});
 
 	it('should save an edited variable', async ({worker}) => {
 		worker.use(
@@ -238,7 +264,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 			}),
 		);
 		const screen = await renderVariables();
-		const row = screen.getByTestId('variable-amount');
+		const row = variableRow(screen, 'amount');
 
 		await userEvent.click(row.getByRole('button', {name: /^Edit variable /}));
 		await expect.element(screen.getByRole('button', {name: 'Add Variable'})).toBeDisabled();
@@ -263,7 +289,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 			}),
 		);
 		const screen = await renderVariables();
-		const row = screen.getByTestId('variable-amount');
+		const row = variableRow(screen, 'amount');
 		await userEvent.click(row.getByRole('button', {name: 'Open'}));
 		const dialog = screen.getByRole('dialog', {name: 'Full value of amount'});
 		await expect.element(dialog).toBeVisible();
@@ -277,7 +303,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 	it('should not save a pending edit when searching with Enter', async ({worker}) => {
 		worker.use(mockQueryVariablesEndpoint({successResponse: variablesResponse([createVariable({name: 'amount'})])}));
 		const screen = await renderVariables();
-		const row = screen.getByTestId('variable-amount');
+		const row = variableRow(screen, 'amount');
 		await userEvent.click(row.getByRole('button', {name: /^Edit variable /}));
 		await appendToEditor(row.getByText('100', {exact: true}), '1');
 
@@ -304,7 +330,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 			}),
 		);
 		const screen = await renderVariables();
-		const row = screen.getByTestId('variable-payload');
+		const row = variableRow(screen, 'payload');
 
 		await userEvent.click(row.getByRole('button', {name: /^Edit variable /}));
 		await expect.element(row.getByRole('group', {name: 'payload'})).toMatchTextContent('1234567');
@@ -406,7 +432,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 	it('should leave edit mode without saving when exiting', async ({worker}) => {
 		worker.use(mockQueryVariablesEndpoint({successResponse: variablesResponse([createVariable({name: 'amount'})])}));
 		const screen = await renderVariables();
-		const row = screen.getByTestId('variable-amount');
+		const row = variableRow(screen, 'amount');
 
 		await userEvent.click(row.getByRole('button', {name: /^Edit variable /}));
 		await appendToEditor(row.getByText('100', {exact: true}), '1');
@@ -507,7 +533,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 			}),
 		);
 		const screen = await renderVariables({search, processInstance});
-		const row = screen.getByTestId('variable-amount');
+		const row = variableRow(screen, 'amount');
 
 		await expect.element(row.getByRole('button', {name: 'Open'})).toBeVisible();
 		await expect.element(row.getByRole('button', {name: /^Edit variable /})).not.toBeInTheDocument();
@@ -518,9 +544,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 		worker.use(mockQueryVariablesEndpoint({successResponse: variablesResponse([createVariable({name: 'amount'})])}));
 		const screen = await renderVariables({processInstance: {state: 'SUSPENDED'}});
 
-		await expect
-			.element(screen.getByTestId('variable-amount').getByRole('button', {name: /^Edit variable /}))
-			.toBeEnabled();
+		await expect.element(variableRow(screen, 'amount').getByRole('button', {name: /^Edit variable /})).toBeEnabled();
 		await expect.element(screen.getByRole('button', {name: 'Add Variable'})).toBeEnabled();
 	});
 
@@ -534,7 +558,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 			}),
 		);
 		const screen = await renderVariables({search: `?elementInstanceKey=${ELEMENT_INSTANCE_KEY}`});
-		const row = screen.getByTestId('variable-amount');
+		const row = variableRow(screen, 'amount');
 
 		await expect.element(row.getByRole('button', {name: 'Open'})).toBeVisible();
 		await expect.element(row.getByRole('button', {name: /^Edit variable /})).not.toBeInTheDocument();
@@ -553,7 +577,7 @@ describe('<ProcessInstanceVariables /> editing', () => {
 			}),
 		);
 		const screen = await renderVariables();
-		const row = screen.getByTestId('variable-payload');
+		const row = variableRow(screen, 'payload');
 
 		await userEvent.click(row.getByRole('button', {name: /^Edit variable /}));
 

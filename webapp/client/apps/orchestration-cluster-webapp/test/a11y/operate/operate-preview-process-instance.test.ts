@@ -128,7 +128,7 @@ test.describe('Variables tab', () => {
 		makeAxeBuilder,
 	}) => {
 		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
-		await expect(operatePreviewProcessInstancePage.variablesList.getByTestId('variable-amount')).toBeVisible();
+		await expect(operatePreviewProcessInstancePage.variableRow('amount')).toBeVisible();
 
 		const results = await makeAxeBuilder().analyze();
 		expect(results.violations).toEqual([]);
@@ -153,10 +153,7 @@ test.describe('Variables tab', () => {
 		makeAxeBuilder,
 	}) => {
 		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
-		await operatePreviewProcessInstancePage.variablesList
-			.getByTestId('variable-amount')
-			.getByRole('button', {name: 'Open'})
-			.click();
+		await operatePreviewProcessInstancePage.variableRow('amount').getByRole('button', {name: 'Open'}).click();
 		await expect(page.getByRole('dialog')).toBeVisible();
 
 		const results = await makeAxeBuilder().analyze();

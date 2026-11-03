@@ -1767,6 +1767,8 @@
 					"exitDescription": "Exit",
 					"save": "Save variable",
 					"saveDescription": "Save",
+					"saving": "Saving variable",
+					"loadingValue": "Loading variable value",
 					"deleteDescription": "Delete",
 					"editTitle": "Edit Variable \"{{name}}\"",
 					"newVariableTitle": "Edit a new Variable",
