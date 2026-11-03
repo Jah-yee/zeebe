@@ -30,6 +30,7 @@ import {ErrorMessage} from '#/operate/shared/ErrorMessage/ErrorMessage';
 import {RichTextEditorModal} from '#/operate/shared/Editors/RichTextEditorModal';
 import {formatTimestamp} from '#/operate/shared/utils/formatTimestamp';
 import {IncidentOperation} from './IncidentOperation';
+import {shouldOfferErrorMessageModal} from './shouldOfferErrorMessageModal';
 import type {ChildInstanceWithIncident, DecisionInstanceLookup, EnhancedIncident} from './incidents.types';
 import {
 	ChildIncidentContainer,
@@ -49,9 +50,6 @@ import {
 
 const InstanceLink = createLink(Link);
 
-// The expanded row wraps the full message, so the modal is reserved for stack traces and unusually
-// large single-line messages where its dedicated viewer adds value over the inline content.
-const MODAL_WORTHY_ERROR_MESSAGE_LENGTH = 200;
 const SKELETON_ROW_COUNT = 10;
 
 type Props = {
@@ -66,10 +64,6 @@ type Props = {
 	onVerticalScrollStartReach: React.ComponentProps<typeof InfiniteScroller>['onVerticalScrollStartReach'];
 	onVerticalScrollEndReach: React.ComponentProps<typeof InfiniteScroller>['onVerticalScrollEndReach'];
 };
-
-function shouldOfferErrorMessageModal(errorMessage: string): boolean {
-	return errorMessage.includes('\n') || errorMessage.length >= MODAL_WORTHY_ERROR_MESSAGE_LENGTH;
-}
 
 const ElementName: React.FC<{
 	incident: EnhancedIncident;

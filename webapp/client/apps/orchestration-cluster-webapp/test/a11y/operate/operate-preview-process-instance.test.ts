@@ -163,9 +163,7 @@ test.describe('Variables tab', () => {
 	});
 });
 
-// TEMPORARY: the design system's DataTable injects an expand column whose header has no text.
-// Remove once the design system labels it.
-const DS_EXPAND_COLUMN_HEADER_RULE = 'empty-table-header';
+const DS_EXPAND_COLUMN_HEADER = 'thead th:first-child';
 
 test.describe('Incidents tab', () => {
 	test.beforeEach(({network}) => {
@@ -194,7 +192,7 @@ test.describe('Incidents tab', () => {
 		await operatePreviewProcessInstancePage.incidentsTab.click();
 		await expect(operatePreviewProcessInstancePage.incidentsTable).toBeVisible();
 
-		const results = await makeAxeBuilder().disableRules([DS_EXPAND_COLUMN_HEADER_RULE]).analyze();
+		const results = await makeAxeBuilder().exclude(DS_EXPAND_COLUMN_HEADER).analyze();
 		expect(results.violations).toEqual([]);
 	});
 
@@ -206,7 +204,7 @@ test.describe('Incidents tab', () => {
 		await operatePreviewProcessInstancePage.incidentsTab.click();
 		await operatePreviewProcessInstancePage.incidentsTable.getByRole('button', {name: 'Expand row'}).click();
 
-		const results = await makeAxeBuilder().disableRules([DS_EXPAND_COLUMN_HEADER_RULE]).analyze();
+		const results = await makeAxeBuilder().exclude(DS_EXPAND_COLUMN_HEADER).analyze();
 		expect(results.violations).toEqual([]);
 	});
 });

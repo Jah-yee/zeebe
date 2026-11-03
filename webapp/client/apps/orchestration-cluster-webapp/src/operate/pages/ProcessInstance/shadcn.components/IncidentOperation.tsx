@@ -26,7 +26,12 @@ const IncidentOperation: React.FC<Props> = ({incidentKey, jobKey, disabled}) => 
 
 	return (
 		<div className="flex items-center justify-end gap-2" data-interactive>
-			{isRetryPending && <Spinner size="default" data-testid="operation-spinner" />}
+			{isRetryPending && (
+				<div role="status" aria-live="polite">
+					<Spinner size="default" aria-hidden="true" />
+					<span className="sr-only">{t('operate.processInstance.operations.retrying')}</span>
+				</div>
+			)}
 			<OperationItems>
 				<OperationItem
 					type="RESOLVE_INCIDENT"

@@ -87,7 +87,6 @@ type BaseProps<TRow> = {
 	onVerticalScrollStartReach?: () => void;
 	onVerticalScrollEndReach?: () => void;
 	onRowClick?: (row: TRow) => void;
-	/** Renders the returned content in an expandable row below each data row. */
 	expansion?: (row: TRow) => React.ReactNode;
 	expandRowLabel?: string;
 	collapseRowLabel?: string;
@@ -195,8 +194,7 @@ function readRowHeights(scrollContainer: HTMLElement): number[] {
 	// marker, see `SkeletonCell`): it isn't part of `rows` and would otherwise skew the
 	// positional height sums below, which assume index N of this array lines up with index N of
 	// `rows`. Matching on `role="status"` instead would also exclude legitimate data rows whose
-	// own content happens to use that role (e.g. a `BatchStateIndicator` cell). An expanded row's
-	// detail row counts towards its owning row, so evicting it still compensates for its height.
+	// own content happens to use that role (e.g. a `BatchStateIndicator` cell).
 	return Array.from(
 		scrollContainer.querySelectorAll<HTMLElement>(
 			`[data-slot="table-body"] [data-slot="table-row"]:not(:has([${SKELETON_EDGE_ATTRIBUTE}]))`,

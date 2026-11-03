@@ -55,7 +55,7 @@ class OperatePreviewProcessInstancePage extends BasePage {
 	}
 
 	get incidentsTable() {
-		return this.page.getByTestId('incidents-table');
+		return this.page.getByRole('table', {name: 'Incidents list'});
 	}
 
 	get incidentsTab() {

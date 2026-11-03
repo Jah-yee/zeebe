@@ -30,8 +30,6 @@ import type {ChildInstanceWithIncident, DecisionInstanceLookup} from './incident
 const DEFAULT_SORT: IncidentsSort = [{field: 'creationTime', order: 'DESC'}];
 const sortSearchParamSchema = createSortSearchParamSchema(z.enum(['errorType', 'creationTime']));
 
-// A decision requirements graph evaluates several decisions for one element instance, and each retry evaluates
-// them again. Sorting puts the root cause last: the most recent failed evaluation.
 function sortByRootCause(decisionInstances: DecisionInstance[]) {
 	return [...decisionInstances].sort(
 		(a, b) =>
@@ -182,7 +180,6 @@ function useIncidentsTab() {
 		hasNextPage: result.hasNextPage,
 		isFetchingPreviousPage: result.isFetchingPreviousPage,
 		isFetchingNextPage: result.isFetchingNextPage,
-		isFetching: result.isFetching,
 		selectIncident: (incident: {elementId: string; elementInstanceKey: string}) => {
 			const selectedIncidents = enhancedIncidents.filter((item) => item.isSelected);
 			if (selectedIncidents.length === 1 && selectedIncidents[0]?.elementInstanceKey === incident.elementInstanceKey) {

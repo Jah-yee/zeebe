@@ -14,7 +14,9 @@ import {
 	mockGetProcessInstanceEndpoint,
 	mockGetProcessInstanceWaitStateStatisticsEndpoint,
 	mockLicenseEndpoint,
+	mockGetIncidentEndpoint,
 	mockQueryProcessInstanceIncidentsEndpoint,
+	mockResolveIncidentEndpoint,
 	mockQueryVariablesEndpoint,
 	mockSystemConfigurationEndpoint,
 } from '#/shared-test-modules/mock-handlers';
@@ -118,36 +120,127 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 		).toBeVisible();
 	});
 
-	test('should list the incidents of the process instance and select the failing element on row click', async ({
-		network,
-		operatePreviewProcessInstancePage,
-		page,
-	}) => {
-		network.use(
-			mockGetProcessInstanceEndpoint({
-				successResponse: HttpResponse.json(
-					createProcessInstance({processInstanceKey: PROCESS_INSTANCE_ID, hasIncident: true}),
-				),
-			}),
-			mockQueryProcessInstanceIncidentsEndpoint({
-				successResponse: HttpResponse.json(
-					createPaginatedResponse({
-						items: [createIncident({errorMessage: 'Payment failed'})],
-						page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
-					}),
-				),
-			}),
-		);
+	test.describe('Incidents tab', () => {
+		test.beforeEach(({network}) => {
+			network.use(
+				mockGetProcessInstanceEndpoint({
+					successResponse: HttpResponse.json(
+						createProcessInstance({processInstanceKey: PROCESS_INSTANCE_ID, hasIncident: true}),
+					),
+				}),
+			);
+		});
 
-		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
-		await operatePreviewProcessInstancePage.incidentsTab.click();
+		test('should select the failing element on row click and clear it on a second click', async ({
+			network,
+			operatePreviewProcessInstancePage,
+			page,
+		}) => {
+			network.use(
+				mockQueryProcessInstanceIncidentsEndpoint({
+					successResponse: HttpResponse.json(
+						createPaginatedResponse({
+							items: [createIncident({errorMessage: 'Payment failed'})],
+							page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+						}),
+					),
+				}),
+			);
+			await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+			await operatePreviewProcessInstancePage.incidentsTab.click();
+			const row = operatePreviewProcessInstancePage.incidentsTable.getByRole('row').filter({hasText: 'Payment failed'});
+			await expect(row).toBeVisible();
+			await expect(row).not.toContainText('Selected');
 
-		const row = operatePreviewProcessInstancePage.incidentsTable.getByRole('row').filter({hasText: 'Payment failed'});
-		await expect(row).toBeVisible();
+			await row.click();
 
-		await row.click();
+			await expect(page).toHaveURL(/elementId=/);
+			await expect(row).toContainText('Selected');
 
-		await expect(page).toHaveURL(/elementId=/);
+			await row.click();
+
+			await expect(page).not.toHaveURL(/elementId=/);
+			await expect(row).not.toContainText('Selected');
+		});
+
+		test('should select the failing element with the keyboard', async ({
+			network,
+			operatePreviewProcessInstancePage,
+			page,
+		}) => {
+			network.use(
+				mockQueryProcessInstanceIncidentsEndpoint({
+					successResponse: HttpResponse.json(
+						createPaginatedResponse({
+							items: [createIncident({errorMessage: 'Payment failed'})],
+							page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+						}),
+					),
+				}),
+			);
+			await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+			await operatePreviewProcessInstancePage.incidentsTab.click();
+			const row = operatePreviewProcessInstancePage.incidentsTable.getByRole('row').filter({hasText: 'Payment failed'});
+
+			await row.getByRole('button', {name: 'Payment failed'}).press('Enter');
+
+			await expect(page).toHaveURL(/elementId=/);
+			await expect(row).toContainText('Selected');
+		});
+
+		test('should retry an incident and remove it from the list once resolved', async ({
+			network,
+			operatePreviewProcessInstancePage,
+			page,
+		}) => {
+			network.use(
+				mockQueryProcessInstanceIncidentsEndpoint({
+					successResponse: HttpResponse.json(
+						createPaginatedResponse({
+							items: [createIncident({errorMessage: 'Payment failed', jobKey: null})],
+							page: {totalItems: 1, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+						}),
+					),
+					once: true,
+				}),
+				mockQueryProcessInstanceIncidentsEndpoint({
+					successResponse: HttpResponse.json(
+						createPaginatedResponse({
+							items: [],
+							page: {totalItems: 0, startCursor: null, endCursor: null, hasMoreTotalItems: false},
+						}),
+					),
+				}),
+				mockResolveIncidentEndpoint({successResponse: new HttpResponse(null, {status: 204})}),
+				mockGetIncidentEndpoint({successResponse: HttpResponse.json(createIncident({state: 'RESOLVED'}))}),
+			);
+			await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+			await operatePreviewProcessInstancePage.incidentsTab.click();
+			const resolution = page.waitForRequest((request) => request.url().endsWith('/resolution'));
+
+			await operatePreviewProcessInstancePage.incidentsTable.getByRole('button', {name: 'Retry Incident'}).click();
+
+			await resolution;
+			await expect(page.getByText('There are no incidents matching this filter set')).toBeVisible();
+		});
+
+		test('should show an error when the incidents cannot be loaded', async ({
+			network,
+			operatePreviewProcessInstancePage,
+			page,
+		}) => {
+			network.use(
+				mockQueryProcessInstanceIncidentsEndpoint({
+					successResponse: HttpResponse.json(createProblemDetails({status: 500}), {status: 500}),
+				}),
+			);
+
+			await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+			await operatePreviewProcessInstancePage.incidentsTab.click();
+
+			await expect(page.getByText("Couldn't fetch data")).toBeVisible();
+			await expect(operatePreviewProcessInstancePage.incidentsTable).toBeHidden();
+		});
 	});
 
 	test('should keep the selected element in the URL and clear it on a second canvas click', async ({

@@ -16,9 +16,8 @@ import {ErrorMessage} from '#/operate/shared/ErrorMessage/shadcn.components/Erro
 import {RichTextEditorModal} from '#/operate/shared/Editors/shadcn.components/RichTextEditorModal';
 import {formatTimestamp} from '#/operate/shared/utils/formatTimestamp';
 import type {ChildInstanceWithIncident, DecisionInstanceLookup, EnhancedIncident} from '../incidents.types';
+import {shouldOfferErrorMessageModal} from '../shouldOfferErrorMessageModal';
 import {IncidentOperation} from './IncidentOperation';
-
-const MODAL_WORTHY_ERROR_MESSAGE_LENGTH = 200;
 
 type Props = {
 	state: 'skeleton' | 'error' | 'empty' | 'content';
@@ -36,10 +35,6 @@ type Props = {
 	onVerticalScrollStartReach: () => void;
 	onVerticalScrollEndReach: () => void;
 };
-
-function shouldOfferErrorMessageModal(errorMessage: string): boolean {
-	return errorMessage.includes('\n') || errorMessage.length >= MODAL_WORTHY_ERROR_MESSAGE_LENGTH;
-}
 
 const TruncatedText: React.FC<{title: string; isFocusable?: boolean; children: React.ReactNode}> = ({
 	title,
@@ -236,7 +231,6 @@ const IncidentsTable: React.FC<Props> = ({
 	return (
 		<>
 			<SortableTable
-				data-testid="incidents-table"
 				className="[&_tbody_tr:has([data-selected-row])]:bg-neutral-background-medium"
 				ariaLabel={t('operate.processInstance.incidents.list')}
 				size="sm"
