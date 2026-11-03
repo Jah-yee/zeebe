@@ -67,8 +67,8 @@ test('should have no accessibility violations with the breadcrumb overflow menu 
 		createCallHierarchy({processInstanceKey, processDefinitionName: `Process ${processInstanceKey}`}),
 	);
 	network.use(
-		...processInstanceHeaderHandlers(createProcessInstance({processInstanceKey: PROCESS_INSTANCE_ID})),
 		mockGetProcessInstanceCallHierarchyEndpoint({successResponse: HttpResponse.json(hierarchy)}),
+		...processInstanceHeaderHandlers(createProcessInstance({processInstanceKey: PROCESS_INSTANCE_ID})),
 	);
 
 	await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
