@@ -129,6 +129,7 @@ function Diagram({
 	const diagramRef = useRef<HTMLDivElement | null>(null);
 	const [isDiagramRendered, setIsDiagramRendered] = useState(false);
 	const viewerRef = useRef<BpmnJS | null>(null);
+	const renderedXmlRef = useRef<string | null>(null);
 	const [isViewboxChanging, setIsViewboxChanging] = useState(false);
 	const [activeOverlays, setActiveOverlays] = useState<OverlayEntry[]>([]);
 	const [selectedElement, setSelectedElement] = useState<SVGGraphicsElement | undefined>(undefined);
@@ -154,7 +155,9 @@ function Diagram({
 			const viewer = viewerRef.current;
 
 			viewer.onOverlayChange = setActiveOverlays;
-			setIsDiagramRendered(false);
+			if (renderedXmlRef.current !== xml) {
+				setIsDiagramRendered(false);
+			}
 
 			await viewer.render({
 				container: diagramCanvasRef.current,
@@ -170,6 +173,7 @@ function Diagram({
 			});
 
 			if (mounted) {
+				renderedXmlRef.current = xml;
 				setSelectedElement(viewer.selectedElement);
 				setIsDiagramRendered(true);
 				resetMinimap();

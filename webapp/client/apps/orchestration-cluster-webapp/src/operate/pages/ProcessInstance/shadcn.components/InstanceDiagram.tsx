@@ -26,9 +26,11 @@ import {
 	calledProcessQuery,
 	calledDecisionQuery,
 } from '../instanceDiagram.queries';
-import {useInstanceDiagramOverlays} from '../useInstanceDiagramOverlays';
+import {useInstanceDiagramOverlays, type ModificationBadge} from '../useInstanceDiagramOverlays';
 import {InstanceHistoryContext} from '../useInstanceHistory';
 import {InstanceDiagramOverlays} from './InstanceDiagramOverlays';
+
+const NO_MODIFICATION_BADGES: ModificationBadge[] = [];
 
 const InstanceDiagram: React.FC = () => {
 	const {processInstanceId, processInstance, selection} = useProcessInstancePage();
@@ -81,7 +83,7 @@ const InstanceDiagram: React.FC = () => {
 		processDefinitionId: processInstance.processDefinitionId,
 		isModificationModeEnabled: false,
 		isExecutionCountVisible,
-		modificationBadges: [],
+		modificationBadges: NO_MODIFICATION_BADGES,
 	});
 	const selectableElements = useMemo(() => statistics.data?.map(({elementId}) => elementId) ?? [], [statistics.data]);
 	const selectedElementIds = useMemo(() => (selectedElementId ? [selectedElementId] : undefined), [selectedElementId]);

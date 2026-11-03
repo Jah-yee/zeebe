@@ -123,6 +123,27 @@ describe('<Diagram />', () => {
 		await expect.poll(() => document.querySelector('[data-element-id="endEvent_1"] .djs-outline')).not.toBeNull();
 	});
 
+	it('should keep focus on a diagram control when overlays update', async () => {
+		const screen = await render(
+			<Diagram
+				xml={BPMN_XML}
+				overlaysData={[{type: OVERLAY_TYPE, elementId: 'startEvent_1', payload: 'a', position: {top: 0, left: 0}}]}
+			/>,
+		);
+		const zoomIn = screen.getByRole('button', {name: 'Zoom in diagram'});
+		await expect.element(zoomIn).toBeVisible();
+		(zoomIn.element() as HTMLElement).focus();
+
+		await screen.rerender(
+			<Diagram
+				xml={BPMN_XML}
+				overlaysData={[{type: OVERLAY_TYPE, elementId: 'startEvent_1', payload: 'b', position: {top: 0, left: 0}}]}
+			/>,
+		);
+
+		await expect.element(zoomIn).toHaveFocus();
+	});
+
 	it('should expose overlay containers via DiagramOverlayContext', async () => {
 		const screen = await render(
 			<Diagram
