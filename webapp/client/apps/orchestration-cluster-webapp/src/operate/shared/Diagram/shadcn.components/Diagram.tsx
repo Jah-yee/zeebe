@@ -135,7 +135,7 @@ function findNearestInDirection(from: SVGElement, candidates: SVGElement[], [dx,
 		if (along <= 0 || across > along * 2) {
 			return;
 		}
-		const score = along + across * 2;
+		const score = Math.hypot(along, across);
 		if (score < bestScore) {
 			best = candidate;
 			bestScore = score;
@@ -316,14 +316,19 @@ function Diagram({
 			return name || type || '';
 		};
 
-		canvas.querySelectorAll('[role="button"]:not(.op-selectable)').forEach((element) => {
-			['tabindex', 'role', 'aria-pressed', 'aria-label', 'aria-describedby'].forEach((attribute) =>
-				element.removeAttribute(attribute),
-			);
-		});
+		canvas
+			.querySelectorAll('[role="button"]:not(.op-selectable), [role="img"][data-element-id]:not(.op-non-selectable)')
+			.forEach((element) => {
+				['tabindex', 'role', 'aria-pressed', 'aria-label', 'aria-describedby'].forEach((attribute) =>
+					element.removeAttribute(attribute),
+				);
+			});
 
 		const selectable = [...canvas.querySelectorAll<SVGElement>('.op-selectable')];
-		const tabStop = selectable.find((element) => element.classList.contains('op-selected')) ?? selectable[0];
+		const tabStop =
+			selectable.find((element) => element === document.activeElement) ??
+			selectable.find((element) => element.classList.contains('op-selected')) ??
+			selectable[0];
 		selectable.forEach((element) => {
 			element.setAttribute('tabindex', element === tabStop ? '0' : '-1');
 			element.setAttribute('role', 'button');
@@ -373,6 +378,10 @@ function Diagram({
 		);
 		if (next !== undefined) {
 			event.preventDefault();
+			const nextId = next.getAttribute('data-element-id');
+			if (nextId !== null) {
+				viewerRef.current?.revealElement(nextId);
+			}
 			next.focus();
 		}
 	}, []);

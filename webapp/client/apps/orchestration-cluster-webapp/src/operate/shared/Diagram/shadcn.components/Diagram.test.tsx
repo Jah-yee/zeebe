@@ -303,6 +303,39 @@ describe('<Diagram />', () => {
 		expect(document.querySelector('[data-element-id="startEvent_1"]')?.hasAttribute('tabindex')).toBe(false);
 	});
 
+	it('should drop the restriction announcement when no elements are restricted anymore', async () => {
+		const screen = await render(
+			<Diagram xml={BPMN_XML} selectableElements={['startEvent_1']} nonSelectableNodeTooltipText="Not selectable" />,
+		);
+		await expect
+			.poll(() => document.querySelector('[data-element-id="endEvent_1"]')?.getAttribute('aria-label'))
+			.toBe('end event, Not selectable');
+
+		await screen.rerender(<Diagram xml={BPMN_XML} />);
+
+		await expect
+			.poll(() => document.querySelector('[data-element-id="endEvent_1"]')?.hasAttribute('aria-label'))
+			.toBe(false);
+		expect(document.querySelector('[data-element-id="endEvent_1"]')?.hasAttribute('role')).toBe(false);
+	});
+
+	it('should keep the focused element as the tab stop when the diagram re-renders', async () => {
+		const screen = await render(<Diagram xml={BPMN_XML} selectableElements={['startEvent_1', 'endEvent_1']} />);
+		await expect
+			.poll(() => document.querySelector('[data-element-id="endEvent_1"]')?.getAttribute('role'))
+			.toBe('button');
+		document.querySelector<SVGElement>('[data-element-id="endEvent_1"]')!.focus();
+
+		await screen.rerender(
+			<Diagram xml={BPMN_XML} selectableElements={['startEvent_1', 'endEvent_1']} nonSelectableNodeTooltipText="x" />,
+		);
+
+		await expect
+			.poll(() => document.querySelector('[data-element-id="endEvent_1"]')?.getAttribute('tabindex'))
+			.toBe('0');
+		expect(document.querySelector('[data-element-id="startEvent_1"]')?.getAttribute('tabindex')).toBe('-1');
+	});
+
 	it('should show the keyboard hint while an element has keyboard focus', async () => {
 		const screen = await render(<Diagram xml={BPMN_XML} selectableElements={['startEvent_1']} />);
 		const hint = screen.getByText('Use the arrow keys to move between elements and Enter to select.');

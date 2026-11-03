@@ -466,6 +466,10 @@ class BpmnJS {
 		this.#ensureOutline(elementId);
 	};
 
+	revealElement = (elementId: string) => {
+		this.#navigatedViewer?.get('canvas')?.scrollToElement(elementId);
+	};
+
 	getElementName = (elementId: string) => {
 		return this.#navigatedViewer?.get('elementRegistry')?.get(elementId)?.businessObject.name;
 	};
