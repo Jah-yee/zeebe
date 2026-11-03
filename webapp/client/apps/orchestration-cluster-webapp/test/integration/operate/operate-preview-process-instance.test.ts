@@ -14,6 +14,7 @@ import {
 	mockGetProcessInstanceEndpoint,
 	mockGetProcessInstanceWaitStateStatisticsEndpoint,
 	mockLicenseEndpoint,
+	mockQueryVariablesEndpoint,
 	mockSystemConfigurationEndpoint,
 } from '#/shared-test-modules/mock-handlers';
 import {createCurrentUser} from '#/shared-test-modules/api-mocks/current-user';
@@ -22,6 +23,7 @@ import {createSystemConfiguration} from '#/shared-test-modules/api-mocks/system-
 import {createProcessInstance} from '#/shared-test-modules/api-mocks/process-instances';
 import {createCallHierarchy} from '#/shared-test-modules/api-mocks/call-hierarchy';
 import {createPaginatedResponse, createProblemDetails} from '#/shared-test-modules/api-mocks/shared';
+import {createQueryVariablesByUserTaskResponse, createVariable} from '#/shared-test-modules/api-mocks/variables';
 import {processInstanceHeaderHandlers} from '#/shared-test-modules/process-instance-header-handlers';
 import {processInstanceDiagramHandlers} from '#/shared-test-modules/process-instance-diagram-handlers';
 
@@ -58,8 +60,27 @@ test.describe('Operate Process Instance DS preview (/operate-preview/processes/:
 		await expect(operatePreviewProcessInstancePage.diagram).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.stateOverlay('Review invoice, Active: 1')).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.stateOverlay('Review invoice, Incidents: 1')).toBeVisible();
-		await expect(operatePreviewProcessInstancePage.bottomPanelPlaceholder).toBeVisible();
 		await expect(operatePreviewProcessInstancePage.variablesTab).toBeVisible();
+	});
+
+	test('should list the variables of the process instance in the Variables tab', async ({
+		network,
+		operatePreviewProcessInstancePage,
+	}) => {
+		network.use(
+			mockQueryVariablesEndpoint({
+				successResponse: HttpResponse.json(
+					createQueryVariablesByUserTaskResponse({
+						items: [createVariable({name: 'amount', value: '100', variableKey: '1'})],
+					}),
+				),
+			}),
+		);
+
+		await operatePreviewProcessInstancePage.goto(PROCESS_INSTANCE_ID);
+
+		await expect(operatePreviewProcessInstancePage.variablesList.getByTestId('variable-amount')).toBeVisible();
+		await expect(operatePreviewProcessInstancePage.variablesList.getByTestId('variable-amount')).toContainText('100');
 	});
 
 	test('should keep the selected element in the URL and clear it on a second canvas click', async ({
