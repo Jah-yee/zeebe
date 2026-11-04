@@ -19,7 +19,7 @@ public interface StorageOrdinalProvider {
   int getStorageOrdinal();
 
   static StorageOrdinalProvider getFixedProvider(final EngineConfiguration config) {
-    return new FixedStorageOrdinalProvider(config.getFixedStorageOrdinal());
+    return new FixedStorageOrdinalProvider(config.getFixedStorageOrdinals());
   }
 
   static StorageOrdinalProvider getDisabledProvider() {

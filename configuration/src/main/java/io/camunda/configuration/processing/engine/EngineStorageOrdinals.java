@@ -8,6 +8,7 @@
 package io.camunda.configuration.processing.engine;
 
 import io.camunda.zeebe.engine.EngineConfiguration;
+import java.util.List;
 
 /**
  * Defines configurations for storage ordinals in the engine. The prefix for this class is
@@ -17,17 +18,19 @@ public class EngineStorageOrdinals {
 
   public static final boolean DEFAULT_ENABLE_ARCHIVERLESS =
       EngineConfiguration.DEFAULT_ENGINE_STORAGE_ORDINALS_ENABLE_ARCHIVERLESS;
-  public static final int DEFAULT_FIXED_STORAGE_ORDINAL =
-      EngineConfiguration.DEFAULT_ENGINE_STORAGE_ORDINALS_FIXED_STORAGE_ORDINAL;
+  public static final List<Integer> DEFAULT_FIXED_STORAGE_ORDINAL =
+      EngineConfiguration.DEFAULT_ENGINE_STORAGE_ORDINALS_FIXED_STORAGE_ORDINALS;
 
   /** Controls whether the archiverless mode is enabled. */
   private boolean enableArchiverless = DEFAULT_ENABLE_ARCHIVERLESS;
 
   /**
-   * Override default storage ordinal with fixed value, mainly used during initial testing. The
-   * default value of -1 means no override is applied.
+   * Override default storage ordinal with a fixed set of values, given as a comma-separated list of
+   * integers (e.g. 1001,1002), mainly used during initial testing. When more than one value is
+   * given, one is picked at random for each new process instance. The default value of -1 means no
+   * override is applied.
    */
-  private int fixedStorageOrdinal = DEFAULT_FIXED_STORAGE_ORDINAL;
+  private List<Integer> fixedStorageOrdinal = DEFAULT_FIXED_STORAGE_ORDINAL;
 
   public boolean isEnableArchiverless() {
     return enableArchiverless;
@@ -37,11 +40,11 @@ public class EngineStorageOrdinals {
     this.enableArchiverless = enableArchiverless;
   }
 
-  public int getFixedStorageOrdinal() {
+  public List<Integer> getFixedStorageOrdinal() {
     return fixedStorageOrdinal;
   }
 
-  public void setFixedStorageOrdinal(final int fixedStorageOrdinal) {
+  public void setFixedStorageOrdinal(final List<Integer> fixedStorageOrdinal) {
     this.fixedStorageOrdinal = fixedStorageOrdinal;
   }
 }

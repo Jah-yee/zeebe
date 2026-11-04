@@ -7,16 +7,28 @@
  */
 package io.camunda.zeebe.engine.processing.storageordinals;
 
-public final class FixedStorageOrdinalProvider implements StorageOrdinalProvider {
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
-  private final int storageOrdinal;
+/** Used to support a fixed set of ordinals */
+public final class FixedStorageOrdinalProvider implements StorageOrdinalProvider {
+  private final List<Integer> storageOrdinals;
 
   public FixedStorageOrdinalProvider(final int storageOrdinal) {
-    this.storageOrdinal = storageOrdinal;
+    this(List.of(storageOrdinal));
+  }
+
+  public FixedStorageOrdinalProvider(final List<Integer> storageOrdinals) {
+    if (storageOrdinals.isEmpty()) {
+      throw new IllegalArgumentException("No storage ordinals specified");
+    }
+    this.storageOrdinals = storageOrdinals;
   }
 
   @Override
   public int getStorageOrdinal() {
-    return storageOrdinal;
+    final var random = ThreadLocalRandom.current();
+    final var index = random.nextInt(storageOrdinals.size());
+    return storageOrdinals.get(index);
   }
 }
