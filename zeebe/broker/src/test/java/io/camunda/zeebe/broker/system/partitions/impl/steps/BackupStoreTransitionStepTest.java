@@ -30,6 +30,7 @@ import io.camunda.zeebe.broker.system.partitions.impl.steps.PartitionTransitionT
 import io.camunda.zeebe.broker.system.partitions.impl.steps.PartitionTransitionTestArgumentProviders.TransitionsThatShouldDoNothing;
 import io.camunda.zeebe.broker.system.partitions.impl.steps.PartitionTransitionTestArgumentProviders.TransitionsThatShouldInstallService;
 import io.camunda.zeebe.scheduler.testing.TestConcurrencyControl;
+import java.net.ConnectException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -129,6 +130,7 @@ class BackupStoreTransitionStepTest {
     s3Config.setEndpoint("http://localhost:1");
     s3Config.setAccessKey("key");
     s3Config.setSecretKey("secret");
+    s3Config.setDefaultsMode(Optional.of(DefaultsMode.STANDARD));
     configureRequiredStore(BackupStoreType.S3, s3Config);
     final var targetRole = Role.LEADER;
 
@@ -178,6 +180,7 @@ class BackupStoreTransitionStepTest {
     azureConfig.setAccountKey(
         "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==");
     azureConfig.setBasePath("non-existent-container");
+    azureConfig.setRetry(new AzureBackupStoreConfig.Retry(Optional.of(1)));
     configureRequiredStore(BackupStoreType.AZURE, azureConfig);
     final var targetRole = Role.LEADER;
 
@@ -191,7 +194,8 @@ class BackupStoreTransitionStepTest {
             "Expected to fail installation when backup is required and Azure is not reachable.")
         .failsWithin(Duration.ofSeconds(11))
         .withThrowableOfType(ExecutionException.class)
-        .withRootCauseInstanceOf(AzureBackupStoreException.ConfigurationException.class);
+        .withMessageContaining(AzureBackupStoreException.ConfigurationException.class.getName())
+        .withRootCauseInstanceOf(ConnectException.class);
     assertThat(transitionContext.getBackupStore()).isNull();
   }
 
@@ -203,6 +207,7 @@ class BackupStoreTransitionStepTest {
     gcsConfig.setBucketName("non-existent-bucket");
     gcsConfig.setHost("http://localhost:1");
     gcsConfig.setAuth(GcsBackupStoreAuth.NONE);
+    gcsConfig.setRetry(new GcsBackupStoreConfig.Retry(Optional.empty(), Optional.of(1)));
     configureRequiredStore(BackupStoreType.GCS, gcsConfig);
     final var targetRole = Role.LEADER;
 
@@ -214,9 +219,10 @@ class BackupStoreTransitionStepTest {
     assertThat(transitionFuture)
         .describedAs(
             "Expected to fail installation when backup is required and GCS is not reachable.")
-        .failsWithin(Duration.ofSeconds(11))
+        .failsWithin(Duration.ofSeconds(5))
         .withThrowableOfType(ExecutionException.class)
-        .withRootCauseInstanceOf(ConfigurationException.class);
+        .withMessageContaining(ConfigurationException.class.getName())
+        .withRootCauseInstanceOf(ConnectException.class);
     assertThat(transitionContext.getBackupStore()).isNull();
   }
 
@@ -257,6 +263,7 @@ class BackupStoreTransitionStepTest {
     s3Config.setRegion("endpoint");
     s3Config.setAccessKey("user");
     s3Config.setSecretKey("password");
+    s3Config.setDefaultsMode(Optional.of(DefaultsMode.STANDARD));
     configureStore(type, s3Config);
   }
 
