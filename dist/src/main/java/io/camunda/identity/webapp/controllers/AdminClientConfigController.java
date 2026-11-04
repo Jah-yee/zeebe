@@ -13,20 +13,19 @@ import io.camunda.authentication.pt.PhysicalTenantCamundaGroups;
 import io.camunda.security.api.model.authz.AuthorizationResourceType;
 import io.camunda.security.api.model.authz.DefaultRole;
 import io.camunda.security.api.model.config.AuthenticationMethod;
-import io.camunda.security.api.model.config.oidc.OidcConfiguration;
 import io.camunda.security.spring.CamundaSecurityLibraryProperties;
 import io.camunda.spring.utils.PhysicalTenantContext;
 import io.camunda.zeebe.gateway.rest.config.WebappConfiguration;
+import io.camunda.zeebe.gateway.rest.controller.usermanagement.MappingRuleMembershipPolicy;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
-import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Controller;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -49,10 +48,11 @@ public class AdminClientConfigController {
 
   private final CamundaSecurityLibraryProperties cslProperties;
   private final PhysicalTenantCamundaGroups camundaGroups;
-  // Only the groups mode is resolved per physical tenant, so the script is built once with each
-  // value. The additional IdP still comes from the cluster configuration (#68209).
-  private final String clientConfigWithCamundaGroups;
-  private final String clientConfigWithoutCamundaGroups;
+  private final MappingRuleMembershipPolicy mappingRuleMembershipPolicy;
+  private final boolean isNewDesignSystemEnabled;
+  // Only the groups mode and the additional IdP are resolved per physical tenant, so the script is
+  // built once for each combination of the two.
+  private final Map<TenantClientConfig, String> clientConfigs = new ConcurrentHashMap<>();
   private final ObjectMapper objectMapper;
 
   public AdminClientConfigController(
@@ -61,29 +61,17 @@ public class AdminClientConfigController {
       final Environment environment) {
     this.cslProperties = cslProperties;
     camundaGroups = new PhysicalTenantCamundaGroups(environment);
+    mappingRuleMembershipPolicy = MappingRuleMembershipPolicy.of(cslProperties, environment);
     final var resolvedWebappConfiguration =
         webappConfiguration != null ? webappConfiguration : new WebappConfiguration();
-    final boolean isNewDesignSystemEnabled =
-        resolvedWebappConfiguration.resolveNewDesignSystemEnabled();
-    final var namedProviders = namedProviders(cslProperties);
-    final boolean isAdditionalIdpConfigured = isAdditionalIdpConfigured(namedProviders);
+    isNewDesignSystemEnabled = resolvedWebappConfiguration.resolveNewDesignSystemEnabled();
 
     LOG.info(
         "Admin new design system resolved to {} (explicit override={})",
         isNewDesignSystemEnabled,
         resolvedWebappConfiguration.getNewDesignSystemEnabled());
-    LOG.info(
-        "Admin additional IdP resolved to {} (namedProviders={})",
-        isAdditionalIdpConfigured,
-        namedProviders.keySet());
 
     objectMapper = new ObjectMapper();
-    clientConfigWithCamundaGroups =
-        generateClientConfig(
-            cslProperties, isNewDesignSystemEnabled, isAdditionalIdpConfigured, true);
-    clientConfigWithoutCamundaGroups =
-        generateClientConfig(
-            cslProperties, isNewDesignSystemEnabled, isAdditionalIdpConfigured, false);
   }
 
   private String generateClientConfig(
@@ -133,30 +121,26 @@ public class AdminClientConfigController {
     return AuthenticationMethod.OIDC.equals(cslProperties.getAuthentication().getMethod());
   }
 
-  private static Map<String, OidcConfiguration> namedProviders(
-      final CamundaSecurityLibraryProperties cslProperties) {
-    final var providers = cslProperties.getAuthentication().getProviders();
-    final var namedProviders = providers != null ? providers.getOidc() : null;
-    return namedProviders != null ? namedProviders : Map.of();
-  }
-
-  // Only the named providers.oidc.* slot counts (the BYOIDP additional-IdP surface); the flat
-  // authentication.oidc block is the primary IdP and is intentionally excluded.
-  private boolean isAdditionalIdpConfigured(final Map<String, OidcConfiguration> namedProviders) {
-    return namedProviders.values().stream()
-        .filter(Objects::nonNull)
-        .anyMatch(oidc -> StringUtils.hasText(oidc.getClientId()));
-  }
-
   @GetMapping(path = "/admin/config.js", produces = "text/javascript;charset=UTF-8")
   @ResponseBody
   @Hidden
   public String getClientConfig(final HttpServletRequest request) {
-    final boolean isCamundaGroupsEnabled =
-        camundaGroups.isCamundaGroupsEnabled(
-            PhysicalTenantContext.getPhysicalTenantId(request), cslProperties.getAuthentication());
-    return isCamundaGroupsEnabled
-        ? clientConfigWithCamundaGroups
-        : clientConfigWithoutCamundaGroups;
+    final String physicalTenantId = PhysicalTenantContext.getPhysicalTenantId(request);
+    final var tenantClientConfig =
+        new TenantClientConfig(
+            camundaGroups.isCamundaGroupsEnabled(
+                physicalTenantId, cslProperties.getAuthentication()),
+            mappingRuleMembershipPolicy.isAdditionalIdpConfigured(physicalTenantId));
+    return clientConfigs.computeIfAbsent(
+        tenantClientConfig,
+        key ->
+            generateClientConfig(
+                cslProperties,
+                isNewDesignSystemEnabled,
+                key.isAdditionalIdpConfigured(),
+                key.isCamundaGroupsEnabled()));
   }
+
+  private record TenantClientConfig(
+      boolean isCamundaGroupsEnabled, boolean isAdditionalIdpConfigured) {}
 }

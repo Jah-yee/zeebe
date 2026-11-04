@@ -345,6 +345,42 @@ public class AdminClientConfigControllerTest {
     assertThat(tenantConfig).containsEntry("isCamundaGroupsEnabled", "false");
   }
 
+  @Test
+  void shouldReturnTheAdditionalIdpOfTheRequestTenant() throws Exception {
+    // given — the cluster has no additional IdP, and tenantb configures one
+    final var cslProperties =
+        createCamundaSecurityLibraryProperties(
+            AuthenticationMethod.OIDC, null, false, "test-org", "test-cluster");
+    final var environment =
+        new MockEnvironment()
+            .withProperty("camunda.security.authentication.method", "oidc")
+            .withProperty(
+                "camunda.physical-tenants.tenantb.security.authentication.providers.oidc.byoidp"
+                    + ".client-id",
+                "byoidp-client");
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new AdminClientConfigController(cslProperties, null, environment))
+            .build();
+
+    // when
+    final var clusterConfig = extractConfigFromResponse(performGetConfig());
+    final var tenantConfig =
+        extractConfigFromResponse(
+            mockMvc
+                .perform(
+                    get("/admin/config.js")
+                        .requestAttr(
+                            PhysicalTenantContext.REQUEST_ATTRIBUTE_PHYSICAL_TENANT_ID, "tenantb"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+    // then
+    assertThat(clusterConfig).containsEntry("isAdditionalIdpConfigured", "false");
+    assertThat(tenantConfig).containsEntry("isAdditionalIdpConfigured", "true");
+  }
+
   private String performGetConfig() throws Exception {
     return mockMvc.perform(get("/admin/config.js")).andReturn().getResponse().getContentAsString();
   }
