@@ -73,7 +73,7 @@ graph TD
     SCHEDULED -- "verify + delete namespace" --> VERIFY
     DAILY -- "one call per variant<br/>(matrix)" --> VARIANT
     VARIANT -- "scenario: max" --> CORE
-    VARIANT -- "always profiles first<br/>30min of each variant" --> PROFILE
+    VARIANT -- "profiles each variant<br/>after the soak" --> PROFILE
     VARIANT -- "45 min soak, then<br/>snapshot metrics" --> METRICS
     VARIANT -- "delete namespace<br/>after metrics" --> DELETE
     WEEKLY -- "main: 3 parallel calls,<br/>realistic, opensearch-realistic,<br/>rdbms-realistic" --> CORE
@@ -407,7 +407,7 @@ Daily stress tests run against the state of the **main** branch via the [Daily l
 
 **Profiling:** Every stress test variant is profiled by [`profile-load-test.yml`](../.github/workflows/profile-load-test.yml).
 
-Before any metrics or profiles are taken the stress tests get a warmup period.
+Before the metrics window starts the stress tests get a 15 minute warmup period. Profiling starts after the soak, so the profiler does not run during the measured window.
 
 ### Ad-hoc load tests
 
