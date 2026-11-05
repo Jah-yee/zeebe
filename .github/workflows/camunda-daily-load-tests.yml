@@ -1,40 +1,29 @@
-# description: Runs a daily max-load stress test against main, currently in four variants: gRPC
-#              and REST (both against Elasticsearch), and no-secondary-storage in both gRPC and
-#              REST flavors (exporters disabled). After a 15-minute warmup, profiles the next 30
-#              minutes of each variant via async-profiler. After a 3-hour soak: snapshots metrics
-#              as a GitHub artifact, persists metrics and flamegraphs to the
-#              camunda-benchmark-load-test-results-prod GCS bucket for long-term retention, posts a
-#              side-by-side summary table (with flamegraph links) to Slack (the scheduled run always
-#              posts; a manual run only when opted in via the post-to-slack input), then immediately
-#              deletes the namespaces to reduce cost.
-#              Naming pattern: medic-daily-YYYY-MM-DD-<sha>
-#              Each variant's full lifecycle (setup, warmup, profile, soak, collect-metrics,
-#              cleanup) is delegated to the reusable stress-load-test.yml workflow via a
-#              matrix — adding a variant is a one-line matrix entry, not a 6-job copy-paste.
-#              The no-secondary-storage variants only run this daily `max` leg; they deliberately
-#              don't get their own multi-week weekly endurance rotation, since that long-horizon
-#              engine coverage is not storage-specific and is already provided by the ES/OS/RDBMS
-#              weekly runs.
-# calls: stress-load-test.yml (per variant)
+# description: Runs a weekly max-load stress test against every supported stable branch (8.8, 8.9,
+#              8.10), each as gRPC with Elasticsearch and gRPC without secondary storage. Uses the
+#              same lifecycle as the daily main stress test (15-minute warmup, 30 minutes of
+#              async-profiler, 3-hour soak, metrics snapshot, cleanup), delegated to the reusable
+#              stress-load-test.yml. Only the setup differs: each stable branch is built and
+#              deployed with its own camunda-load-test.yml, everything else runs from main.
+#              Persists metrics and flamegraphs to the camunda-benchmark-load-test-results-prod GCS
+#              bucket and posts a separate side-by-side summary to Slack (the scheduled run always
+#              posts; a manual run only when opted in via post-to-slack).
+#              Runs on Mondays only, since stable branches see few changes between runs.
+#              Naming pattern: medic-stable-YYYY-MM-DD-<sha>-<key>
+# calls: stress-load-test.yml (per leg)
 # type: CI
 # owner: @camunda/reliability-testing
-name: Daily Camunda Platform Load Tests
+name: Stable Branches Stress Tests
 on:
   workflow_dispatch:
-     inputs:
-      reuse-tag:
-        description: 'Docker image tag, that should be reused for the load tests. Allows to skip the docker image build step, can be used for recreating previous tests.'
-        type: string
-        default: ""
-        required: false
+    inputs:
       post-to-slack:
-        description: 'Post the results to the reliability-testing Slack channel (useful for an end-to-end test run). Always posts on the scheduled run regardless of this input.'
+        description: 'Post the results to the reliability-testing Slack channel. Always posts on the scheduled run regardless of this input.'
         type: boolean
         default: false
         required: false
   schedule:
-    # Runs at 2 am Monday-Friday https://crontab.guru/#0_2_*_*_1-5
-    - cron: 0 2 * * 1-5
+    # Runs at 4 am on Mondays https://crontab.guru/#0_4_*_*_1
+    - cron: 0 4 * * 1
 
 defaults:
   run:
@@ -44,7 +33,6 @@ defaults:
 
 env:
   TEST_OWNER: '@camunda/reliability-testing'
-  REUSE_TAG: ${{ inputs.reuse-tag }}
 
 jobs:
   benchmark-data:
@@ -60,20 +48,7 @@ jobs:
           persist-credentials: false
       - name: Collect benchmark data
         id: data
-        run: |
-          if [[ -z "${REUSE_TAG}" ]]; then
-            echo "Creating new daily load test benchmark"
-            echo "benchmark=medic-daily-$(date --utc "+%Y-%m-%d")-$(git rev-parse --short HEAD)-test" >> "$GITHUB_OUTPUT"
-          else
-            # Example:
-            # $ echo ${tag%?}
-            # medic-daily-2025-12-18-b1bd4006-test-b1bd400
-            # $ echo ${tag%-*}
-            # medic-daily-2025-12-18-b1bd4006-test
-            var=${REUSE_TAG%-*}
-            echo "Re-creating daily load test, with name: $var and tag: $REUSE_TAG"
-            echo "benchmark=$var" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "benchmark=medic-stable-$(date --utc "+%Y-%m-%d")-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
       - name: Observe build status
         if: always()
         continue-on-error: true
@@ -84,9 +59,8 @@ jobs:
           secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
           secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
 
-
   run-variant:
-    name: ${{ matrix.variant.label }}
+    name: ${{ matrix.leg.label }}
     needs: benchmark-data
     permissions:
       contents: read
@@ -94,39 +68,51 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Each entry fully describes one variant. Adding a variant (e.g. a future RDBMS leg) is
-        # a new entry here — also add its "key:label" pair to variant-order of the
-        # publish-results job below (in matrix order), or its metrics will be silently dropped
-        # from the Slack summary and the combined artifact.
-        variant:
-          - key: grpc
-            label: gRPC
-            load-test-load: '--set global.preferRest.enabled=false'
-            load-test-setup-helm-values: '--set elasticsearch.storage.requests=64Gi'
-            secondary-storage-type: elasticsearch
-          - key: rest
-            label: REST
-            load-test-load: '--set global.preferRest.enabled=true'
-            load-test-setup-helm-values: '--set elasticsearch.storage.requests=64Gi'
-            secondary-storage-type: elasticsearch
-          - key: none-grpc
-            label: None-gRPC
-            load-test-load: '--set global.preferRest.enabled=false'
-            load-test-setup-helm-values: ''
-            secondary-storage-type: none
-          - key: none-rest
-            label: None-REST
-            load-test-load: '--set global.preferRest.enabled=true'
-            load-test-setup-helm-values: ''
-            secondary-storage-type: none
+        # Each entry is one leg. The key becomes the namespace suffix and must stay short: the
+        # namespace is the Helm release name, which Helm caps at 53 characters. The label names the
+        # job in the Actions UI ("<label> / Soak"). Adding a leg also needs its "key:label" pair in
+        # variant-order of the publish-results job below. When a new minor becomes stable, add
+        # its legs here and a setup job in stress-load-test.yml.
+        # load-test-setup-helm-values only reaches 8.10, the older stable workflows lack that input.
+        leg:
+          - key: 88-grpc
+            label: 8.8-gRPC
+            branch: '8.8'
+            storage: elasticsearch
+            setup-values: ''
+          - key: 88-none
+            label: 8.8-None-gRPC
+            branch: '8.8'
+            storage: none
+            setup-values: ''
+          - key: 89-grpc
+            label: 8.9-gRPC
+            branch: '8.9'
+            storage: elasticsearch
+            setup-values: ''
+          - key: 89-none
+            label: 8.9-None-gRPC
+            branch: '8.9'
+            storage: none
+            setup-values: ''
+          - key: 810-grpc
+            label: 8.10-gRPC
+            branch: '8.10'
+            storage: elasticsearch
+            setup-values: '--set elasticsearch.storage.requests=64Gi'
+          - key: 810-none
+            label: 8.10-None-gRPC
+            branch: '8.10'
+            storage: none
+            setup-values: ''
     uses: ./.github/workflows/stress-load-test.yml
     secrets: inherit
     with:
-      name: ${{ needs.benchmark-data.outputs.benchmark }}-${{ matrix.variant.key }}
-      build-frontend: true
-      load-test-load: ${{ matrix.variant.load-test-load }}
-      load-test-setup-helm-values: ${{ matrix.variant.load-test-setup-helm-values }}
-      secondary-storage-type: ${{ matrix.variant.secondary-storage-type }}
+      name: ${{ needs.benchmark-data.outputs.benchmark }}-${{ matrix.leg.key }}
+      stable-branch: ${{ matrix.leg.branch }}
+      secondary-storage-type: ${{ matrix.leg.storage }}
+      load-test-load: '--set global.preferRest.enabled=false'
+      load-test-setup-helm-values: ${{ matrix.leg.setup-values }}
 
   publish-results:
     name: Publish results
@@ -142,11 +128,10 @@ jobs:
       benchmark: ${{ needs.benchmark-data.outputs.benchmark }}
       # Column order of the Slack table, one "key:label" pair per run-variant matrix entry (a leg
       # missing here is dropped from the results). The key is the -<key> suffix of the leg's name.
-      variant-order: 'grpc:gRPC rest:REST none-grpc:None-gRPC none-rest:None-REST'
-      # resolve-daily.py finds the benchmark by the prefix of this artifact name, keep it stable.
-      metrics-artifact-name: daily-load-test-metrics-${{ needs.benchmark-data.outputs.benchmark }}
-      gcs-path: automated/daily/stress-wip-test
-      slack-title: WIP test, Daily Load Test Results
+      variant-order: '88-grpc:8.8-gRPC 88-none:8.8-None-gRPC 89-grpc:8.9-gRPC 89-none:8.9-None-gRPC 810-grpc:8.10-gRPC 810-none:8.10-None-gRPC'
+      metrics-artifact-name: stable-stress-metrics-${{ needs.benchmark-data.outputs.benchmark }}
+      gcs-path: automated/stress-stable
+      slack-title: Stable Branch Stress Test Results
       post-to-slack: ${{ github.event_name != 'workflow_dispatch' || inputs.post-to-slack }}
 
   notify:
@@ -183,7 +168,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ":warning: *Daily load test creation failed:*"
+                    "text": ":warning: *Stable stress test creation failed:*"
                   }
                 },
                 {
