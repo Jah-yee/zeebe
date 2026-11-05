@@ -104,8 +104,8 @@ env:
   # Fixed timing constants: no current or planned variant needs different values, and GitHub
   # Actions can't compute `timeout-minutes` from an input expression, so these stay hardcoded
   # rather than caller-configurable (see profile-load-test.yml's similar INVARIANT comment).
-  WARMUP_SECONDS: 900
-  SOAK_SECONDS: 10800
+  WARMUP_SECONDS: 300
+  SOAK_SECONDS: 1200
 
 jobs:
   setup:
@@ -262,7 +262,7 @@ jobs:
     secrets: inherit
     with:
       namespace: c8-${{ inputs.name }}
-      duration-seconds: '10800'
+      duration-seconds: '1200'
       at: ${{ needs.soak.outputs.soak_end_epoch }}
 
   # Upload this variant's metrics as its own artifact for the caller's aggregate-metrics job to

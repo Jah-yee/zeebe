@@ -145,8 +145,8 @@ jobs:
       variant-order: 'grpc:gRPC rest:REST none-grpc:None-gRPC none-rest:None-REST'
       # resolve-daily.py finds the benchmark by the prefix of this artifact name, keep it stable.
       metrics-artifact-name: daily-load-test-metrics-${{ needs.benchmark-data.outputs.benchmark }}
-      gcs-path: automated/daily/stress
-      slack-title: Daily Load Test Results
+      gcs-path: automated/daily/stress-wip-test
+      slack-title: WIP test, Daily Load Test Results
       post-to-slack: ${{ github.event_name != 'workflow_dispatch' || inputs.post-to-slack }}
 
   notify:
